@@ -1,0 +1,4 @@
+Subagent definition (agent)
+  Claude Code  .claude/agents/<name>.md (Markdown + YAML)
+  Codex        .codex/agents/<name>.toml (developer_instructions)
+  Antigravity  .agents/agents/<name>.md, ~/.gemini/config/agents/ (app and CLI only)

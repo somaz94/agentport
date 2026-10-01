@@ -1,0 +1,235 @@
+// Package frontmatter splits Markdown into YAML frontmatter and body, reads it leniently and
+// writes it strictly.
+//
+// Reading is lenient because Claude Code (and, more narrowly, Codex) repairs invalid YAML before
+// parsing, so a file it loads may not be strict YAML. Writing is strict because Antigravity drops an
+// agent whose frontmatter does not parse, without any error.
+package frontmatter
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"regexp"
+	"slices"
+	"strings"
+
+	"go.yaml.in/yaml/v3"
+)
+
+const delimiter = "---"
+
+// Document is a Markdown file split into frontmatter and body.
+type Document struct {
+	// Fields is the frontmatter mapping, in source key order. Nil when the file has none.
+	Fields *yaml.Node
+	Body   string
+	// Repaired reports that the frontmatter only parsed after the lenient repair pass.
+	Repaired bool
+}
+
+// Parse splits data into frontmatter and body. A file without a leading `---` line has no
+// frontmatter and is all body. A UTF-8 BOM is dropped and CRLF line endings become LF.
+func Parse(data []byte) (*Document, error) {
+	text := strings.ReplaceAll(strings.TrimPrefix(string(data), "\uFEFF"), "\r\n", "\n")
+	if !strings.HasPrefix(text, delimiter+"\n") {
+		return &Document{Body: text}, nil
+	}
+	rest := text[len(delimiter)+1:]
+	var raw, body string
+	switch {
+	case strings.HasPrefix(rest, delimiter+"\n"):
+		body = rest[len(delimiter)+1:]
+	case rest == delimiter:
+	default:
+		end := strings.Index(rest, "\n"+delimiter+"\n")
+		if end < 0 {
+			if !strings.HasSuffix(rest, "\n"+delimiter) {
+				return nil, errors.New("frontmatter has no closing --- line")
+			}
+			end = len(rest) - len(delimiter) - 1
+			raw = rest[:end]
+		} else {
+			raw, body = rest[:end], rest[end+len(delimiter)+2:]
+		}
+	}
+
+	doc := &Document{Body: body}
+	fields, err := decode(raw)
+	if err != nil {
+		var repairErr error
+		if fields, repairErr = decode(Repair(raw)); repairErr != nil {
+			return nil, fmt.Errorf("parse frontmatter: %w", err)
+		}
+		doc.Repaired = true
+	}
+	doc.Fields = fields
+	return doc, nil
+}
+
+func decode(raw string) (*yaml.Node, error) {
+	var root yaml.Node
+	if err := yaml.Unmarshal([]byte(raw), &root); err != nil {
+		return nil, err
+	}
+	if root.Kind == 0 {
+		return &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}, nil
+	}
+	if len(root.Content) != 1 || root.Content[0].Kind != yaml.MappingNode {
+		return nil, errors.New("frontmatter is not a mapping")
+	}
+	// yaml.v3 skips its duplicate-key check when decoding into a Node, and a strict parser on the
+	// target side rejects the file.
+	m := root.Content[0]
+	seen := make(map[string]int, len(m.Content)/2)
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		k := m.Content[i]
+		if prev, dup := seen[k.Value]; dup {
+			return nil, fmt.Errorf("line %d: key %q already defined at line %d", k.Line, k.Value, prev)
+		}
+		seen[k.Value] = k.Line
+	}
+	return m, nil
+}
+
+var (
+	topLevelScalar = regexp.MustCompile(`^([A-Za-z0-9_.-]+):[ \t]+(.+?)[ \t]*$`)
+	commentMarker  = regexp.MustCompile(`(^|[ \t])#`)
+)
+
+// Repair single-quotes every top-level value that does not parse on its own, such as
+// `description: Use when: x`, a leading backtick or `argument-hint: [a] [b]`, and every value
+// containing a comment marker, which Claude Code also keeps as text. Already-quoted values and
+// values that parse alone, including flow lists like `[Read, Grep]`, are left alone.
+func Repair(raw string) string {
+	lines := strings.Split(raw, "\n")
+	for i, line := range lines {
+		m := topLevelScalar.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		key, val := m[1], m[2]
+		if strings.ContainsAny(val[:1], `'"`) || (parsesAlone(val) && !commentMarker.MatchString(val)) {
+			continue
+		}
+		lines[i] = key + ": '" + strings.ReplaceAll(val, "'", "''") + "'"
+	}
+	return strings.Join(lines, "\n")
+}
+
+func parsesAlone(val string) bool {
+	var n yaml.Node
+	return yaml.Unmarshal([]byte("k: "+val), &n) == nil
+}
+
+// Keys returns the frontmatter keys in order.
+func (d *Document) Keys() []string {
+	if d.Fields == nil {
+		return nil
+	}
+	keys := make([]string, 0, len(d.Fields.Content)/2)
+	for i := 0; i+1 < len(d.Fields.Content); i += 2 {
+		keys = append(keys, d.Fields.Content[i].Value)
+	}
+	return keys
+}
+
+// Get returns the value node for key.
+func (d *Document) Get(key string) (*yaml.Node, bool) {
+	if d.Fields == nil {
+		return nil, false
+	}
+	for i := 0; i+1 < len(d.Fields.Content); i += 2 {
+		if d.Fields.Content[i].Value == key {
+			return d.Fields.Content[i+1], true
+		}
+	}
+	return nil, false
+}
+
+// Scalar returns the value of key when it is a scalar.
+func (d *Document) Scalar(key string) (string, bool) {
+	n, ok := d.Get(key)
+	if !ok || n.Kind != yaml.ScalarNode {
+		return "", false
+	}
+	return n.Value, true
+}
+
+// Set replaces key's value, or appends key when it is absent.
+func (d *Document) Set(key string, value *yaml.Node) {
+	if d.Fields == nil {
+		d.Fields = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	}
+	for i := 0; i+1 < len(d.Fields.Content); i += 2 {
+		if d.Fields.Content[i].Value == key {
+			d.Fields.Content[i+1] = value
+			return
+		}
+	}
+	d.Fields.Content = append(d.Fields.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, value)
+}
+
+// SetString sets key to a string scalar.
+func (d *Document) SetString(key, value string) {
+	d.Set(key, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value})
+}
+
+// SetList sets key to a block sequence of strings.
+func (d *Document) SetList(key string, values []string) {
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	for _, v := range values {
+		seq.Content = append(seq.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v})
+	}
+	d.Set(key, seq)
+}
+
+// Delete removes key if present.
+func (d *Document) Delete(key string) {
+	if d.Fields == nil {
+		return
+	}
+	for i := 0; i+1 < len(d.Fields.Content); i += 2 {
+		if d.Fields.Content[i].Value == key {
+			d.Fields.Content = append(d.Fields.Content[:i], d.Fields.Content[i+2:]...)
+			return
+		}
+	}
+}
+
+// Marshal renders the document as strict YAML frontmatter followed by the body. `description`
+// is single-quoted because it routinely carries `: ` and backticks; the emitter falls back to
+// double quotes only for characters single quotes cannot hold. The document is not modified.
+func (d *Document) Marshal() ([]byte, error) {
+	var out bytes.Buffer
+	if d.Fields != nil {
+		out.WriteString(delimiter + "\n")
+		if len(d.Fields.Content) > 0 {
+			enc := yaml.NewEncoder(&out)
+			enc.SetIndent(2)
+			if err := enc.Encode(withQuotedDescription(d.Fields)); err != nil {
+				return nil, fmt.Errorf("encode frontmatter: %w", err)
+			}
+			if err := enc.Close(); err != nil {
+				return nil, fmt.Errorf("encode frontmatter: %w", err)
+			}
+		}
+		out.WriteString(delimiter + "\n")
+	}
+	out.WriteString(d.Body)
+	return out.Bytes(), nil
+}
+
+func withQuotedDescription(m *yaml.Node) *yaml.Node {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == "description" && m.Content[i+1].Kind == yaml.ScalarNode {
+			desc := *m.Content[i+1]
+			desc.Style = yaml.SingleQuotedStyle
+			cp := *m
+			cp.Content = slices.Clone(m.Content)
+			cp.Content[i+1] = &desc
+			return &cp
+		}
+	}
+	return m
+}

@@ -1,0 +1,46 @@
+name: Backup GitHub to GitLab
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - .github/workflows/*
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Don't cancel in-flight runs: a force-pushed `--all` is non-atomic, so an
+# interrupted push leaves GitLab with partial refs.
+concurrency:
+  group: gitlab-mirror
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitHub Repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+
+      - name: Mirror to GitLab
+        uses: somaz94/multi-git-mirror@v1
+        with:
+          targets: |
+            gitlab::https://gitlab.com/backup6695808/agentport.git
+          gitlab_token: ${{ secrets.GITLAB_TOKEN }}
+          mirror_branches: 'all'
+          mirror_tags: 'true'
+          force_push: 'true'
+          # GitLab.com occasionally declines a mirror push with an empty
+          # pre-receive message (an internal API timeout, not a real rule
+          # violation). Retry instead of failing the backup outright.
+          retry_count: '2'

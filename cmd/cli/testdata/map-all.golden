@@ -1,0 +1,44 @@
+Always-on instructions (instructions)
+  Claude Code  CLAUDE.md (+ .claude/rules/*.md); AGENTS.md only when no CLAUDE.md exists
+  Codex        AGENTS.md (AGENTS.override.md wins), 32 KiB budget for project files
+  Antigravity  AGENTS.md or GEMINI.md (both load if both exist); rules/*.md need a trigger
+
+User-invoked prompt (command)
+  Claude Code  Slash command .claude/commands/<name>.md, merged into skills (/name)
+  Codex        Custom prompts removed in rust-v0.118.0; use a skill ($name)
+  Antigravity  Workflows are deprecated; use a skill (/name)
+
+Skill (Agent Skills SKILL.md) (skill)
+  Claude Code  .claude/skills/<name>/SKILL.md
+  Codex        .agents/skills/<name>/SKILL.md (+ agents/openai.yaml sidecar)
+  Antigravity  .agents/skills/<name>/SKILL.md, ~/.gemini/config/skills/
+
+Subagent definition (agent)
+  Claude Code  .claude/agents/<name>.md (Markdown + YAML)
+  Codex        .codex/agents/<name>.toml (developer_instructions)
+  Antigravity  .agents/agents/<name>.md, ~/.gemini/config/agents/ (app and CLI only)
+
+Tool that starts a subagent (delegate)
+  Claude Code  Agent (subagent_type)
+  Codex        spawn_agent (agent_type)
+  Antigravity  invoke_subagent
+
+Lifecycle hooks (hook)
+  Claude Code  settings.json hooks
+  Codex        hooks.json or config.toml [hooks]; each hook must be trusted before it runs
+  Antigravity  hooks.json
+
+MCP servers (mcp)
+  Claude Code  .mcp.json, ~/.claude.json
+  Codex        config.toml [mcp_servers.<id>]
+  Antigravity  mcp_config.json
+
+Plugin bundle (plugin)
+  Claude Code  .claude-plugin/plugin.json
+  Codex        Reads the Claude plugin manifest
+  Antigravity  plugins/<name>/plugin.json
+
+Configuration roots (user / project) (root)
+  Claude Code  ~/.claude/ / .claude/
+  Codex        ~/.codex/ + ~/.agents/ / .codex/ + .agents/
+  Antigravity  ~/.gemini/config/ / .agents/

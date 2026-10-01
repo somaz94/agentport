@@ -1,0 +1,11 @@
+[
+  {
+    "kind": "skill",
+    "concept": "Skill (Agent Skills SKILL.md)",
+    "terms": {
+      "antigravity": ".agents/skills/<name>/SKILL.md, ~/.gemini/config/skills/",
+      "claude": ".claude/skills/<name>/SKILL.md",
+      "codex": ".agents/skills/<name>/SKILL.md (+ agents/openai.yaml sidecar)"
+    }
+  }
+]

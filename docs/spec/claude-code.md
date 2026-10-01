@@ -53,7 +53,9 @@ No key is required. `name` defaults to the directory name; a missing `descriptio
 
 The portable subset accepted by claude.ai uploads and the Skills API is `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`; any other key is a hard error there (docs).
 
-Frontmatter parsing is lenient: a repair pass re-quotes values matching ``[{}[\]*&#!|>%@`]`` or `: ` before parsing (binary). A file Claude Code reads can therefore be invalid strict YAML; the reader must apply the same repair, and every writer must emit strict YAML.
+Frontmatter parsing is lenient: a repair pass re-quotes values matching ``[{}[\]*&#!|>%@`]`` or `: ` before parsing (binary). A file Claude Code reads can therefore be invalid strict YAML, and every writer must emit strict YAML.
+
+agentport's reader repairs only when the strict parse fails, then single-quotes each top-level value that does not parse on its own (`Use when: x`, a leading backtick, `[a] [b]`) or contains a comment marker. It deliberately differs from Claude Code in one way: a value that parses on its own as a flow list (`tools: [Read, Grep]`) stays a list, where Claude Code would turn it into a string.
 
 <br/>
 

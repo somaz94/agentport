@@ -1,0 +1,146 @@
+// Package ir is the harness-neutral form every reader produces and every writer consumes.
+package ir
+
+import (
+	"fmt"
+	"io/fs"
+	"path"
+	"regexp"
+	"strings"
+
+	"github.com/somaz94/agentport/internal/harness"
+)
+
+// Kind is the type of a customization.
+type Kind string
+
+// Customization kinds.
+const (
+	KindSkill        Kind = "skill"
+	KindCommand      Kind = "command"
+	KindAgent        Kind = "agent"
+	KindInstructions Kind = "instructions"
+	KindHook         Kind = "hook"
+	KindMCP          Kind = "mcp"
+)
+
+// Kinds lists every kind in display order.
+var Kinds = []Kind{KindSkill, KindCommand, KindAgent, KindInstructions, KindHook, KindMCP}
+
+// ParseKind resolves a kind name.
+func ParseKind(s string) (Kind, error) {
+	for _, k := range Kinds {
+		if string(k) == s {
+			return k, nil
+		}
+	}
+	return "", fmt.Errorf("unknown kind %q", s)
+}
+
+// Capability is a harness-neutral tool capability; writers map it to tool names.
+type Capability string
+
+// Tool capabilities.
+const (
+	CapRead      Capability = "read"
+	CapSearch    Capability = "search"
+	CapGlob      Capability = "glob"
+	CapShell     Capability = "shell"
+	CapEdit      Capability = "edit"
+	CapWrite     Capability = "write"
+	CapWebFetch  Capability = "web_fetch"
+	CapWebSearch Capability = "web_search"
+	CapDelegate  Capability = "delegate"
+	CapAskUser   Capability = "ask_user"
+	CapPlan      Capability = "plan"
+)
+
+// ToolSet is what an agent may call. The zero value grants nothing.
+type ToolSet struct {
+	// All means the source granted every tool, e.g. a Claude agent with no `tools` key.
+	All bool
+	// Caps holds the granted capabilities, deduplicated, in source order.
+	Caps []Capability
+	// Unknown holds source tool names that map to no capability.
+	Unknown []string
+}
+
+// Add appends c unless it is already present.
+func (t *ToolSet) Add(c Capability) {
+	if !t.Has(c) {
+		t.Caps = append(t.Caps, c)
+	}
+}
+
+// Has reports whether c is granted, either explicitly or through All.
+func (t ToolSet) Has(c Capability) bool {
+	if t.All {
+		return true
+	}
+	for _, x := range t.Caps {
+		if x == c {
+			return true
+		}
+	}
+	return false
+}
+
+// Invocation describes who may start a skill or command.
+type Invocation struct {
+	UserInvocable  bool
+	ModelInvocable bool
+	ArgumentHint   string
+}
+
+// Resource is a file bundled with a skill, kept byte for byte with its mode.
+type Resource struct {
+	Path string
+	Mode fs.FileMode
+	Data []byte
+}
+
+// Source records where an item was read from.
+type Source struct {
+	Harness harness.ID
+	Path    string
+}
+
+// Item is one customization in harness-neutral form.
+type Item struct {
+	Kind        Kind
+	Name        string
+	Description string
+	Body        string
+	Invocation  Invocation
+	// Tools is nil for kinds that carry no tool list.
+	Tools *ToolSet
+	// Model is the source value verbatim; empty means inherit.
+	Model     string
+	Resources []Resource
+	// Extensions keeps source-only frontmatter so a round trip back to the source loses nothing.
+	Extensions map[string]any
+	Source     Source
+}
+
+var skillName = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// ValidateSkillName applies the Agent Skills naming rule: lowercase letters, digits and
+// single hyphens, at most 64 characters. Antigravity does not enforce it, Codex caps the length,
+// so a writer checks it before emitting a name that another harness might reject.
+func ValidateSkillName(name string) error {
+	if len(name) > 64 {
+		return fmt.Errorf("skill name %q is longer than 64 characters", name)
+	}
+	if !skillName.MatchString(name) {
+		return fmt.Errorf("skill name %q must be lowercase letters, digits and single hyphens", name)
+	}
+	return nil
+}
+
+// CommandSkillName derives a skill name from a command file path relative to its commands
+// directory: `frontend/component.md` becomes `frontend-component`, mirroring Claude's
+// `/frontend:component` namespace with a separator every harness accepts.
+func CommandSkillName(rel string) string {
+	rel = strings.TrimSuffix(path.Clean(strings.ReplaceAll(rel, `\`, "/")), ".md")
+	return strings.ToLower(strings.ReplaceAll(rel, "/", "-"))
+}
