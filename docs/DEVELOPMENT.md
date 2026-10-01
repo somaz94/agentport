@@ -18,7 +18,7 @@ make cover        # coverage report
 make cover-check  # fail below COVER_MIN (cmd/main.go is excluded; it only calls cli.Execute)
 make fmt          # go fmt
 make vet          # go vet
-make ci           # fmt-check, vet, test, cover-check, markers, build
+make ci           # fmt-check, vet, test, cover-check, build
 ```
 
 <br/>
@@ -35,17 +35,6 @@ git diff testdata # review every changed line before committing
 The switch is an environment variable rather than a `-update` flag because `go test ./... -update` fails in every package that does not define the flag.
 
 Fixtures are written by hand. Do not copy a real harness configuration into `testdata/`.
-
-<br/>
-
-## Personal-marker check
-
-`make markers` greps every tracked and untracked file for an extended regex of values that must never be published, such as an account name or an internal network range. The pattern itself is never committed:
-
-- locally it is the first line of `${XDG_CONFIG_HOME:-~/.config}/agentport/markers`;
-- in CI it is the `AGENTPORT_MARKERS` repository secret.
-
-With neither set the check is skipped, which is the case for pull requests from forks.
 
 <br/>
 

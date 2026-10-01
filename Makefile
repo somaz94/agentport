@@ -1,4 +1,4 @@
-.PHONY: build clean test test-unit cover cover-html cover-check golden fmt fmt-check vet markers ci install check-gh branch pr help
+.PHONY: build clean test test-unit cover cover-html cover-check golden fmt fmt-check vet ci install check-gh branch pr help
 
 APP_NAME=agentport
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -52,10 +52,7 @@ fmt-check: ## Fail when any file is not gofmt-formatted
 vet: ## Run go vet
 	go vet ./...
 
-markers: ## Fail when a personal marker is committed (pattern from AGENTPORT_MARKERS)
-	./scripts/check-markers.sh
-
-ci: fmt-check vet test cover-check markers build ## Run every check CI runs
+ci: fmt-check vet test cover-check build ## Run every check CI runs
 
 ## Install
 

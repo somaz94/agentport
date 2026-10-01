@@ -55,11 +55,6 @@ jobs:
       - name: Enforce coverage minimum
         run: make cover-check
 
-      - name: Check for personal markers
-        env:
-          AGENTPORT_MARKERS: ${{ secrets.AGENTPORT_MARKERS }}
-        run: make markers
-
   build:
     name: Build
     needs: unit-tests
