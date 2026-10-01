@@ -24,10 +24,14 @@ agentport converts with these rules, reports per field what was **mapped**, **tr
 ## Usage
 
 ```bash
-agentport map            # what each harness calls a customization, and where it lives
-agentport map agent      # one concept
-agentport map -o json
+agentport map                 # what each harness calls a customization, and where it lives
+agentport scan                # what is installed for each harness, and how portable each skill is
+agentport convert ~/.claude/skills/my-skill --to antigravity            # preview + loss report
+agentport convert ~/.claude/skills/my-skill --to codex --out ./out      # write the converted skill
+agentport convert ~/.claude/skills/my-skill --to codex --strict         # exit 2 if anything is lost
 ```
+
+Every command takes `-o json`.
 
 `agentport --help` lists the commands available in the build you have.
 

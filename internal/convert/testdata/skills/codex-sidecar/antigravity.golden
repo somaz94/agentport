@@ -1,0 +1,44 @@
+== SKILL.md (0644)
+---
+name: codex-skill
+description: 'A Codex skill the model never picks on its own.'
+metadata:
+  short-description: Manual only
+disable-model-invocation: true
+---
+Do the manual thing.
+== agents/openai.yaml (0644)
+interface:
+  display_name: Codex Skill
+policy:
+  allow_implicit_invocation: false
+== loss report
+[
+  {
+    "source": "Codex skill codex-skill",
+    "target": "Antigravity skill codex-skill",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "metadata",
+        "status": "mapped"
+      },
+      {
+        "field": "disable-model-invocation",
+        "status": "mapped"
+      },
+      {
+        "field": "agents/openai.yaml",
+        "status": "mapped",
+        "detail": "kept as a bundled file for Codex; Antigravity ignores it"
+      }
+    ]
+  }
+]

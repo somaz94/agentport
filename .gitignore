@@ -8,6 +8,7 @@ bin/
 
 # Test
 coverage.out
+coverage.raw
 coverage.html
 
 # IDE

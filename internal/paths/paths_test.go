@@ -82,6 +82,38 @@ func TestLayoutFacts(t *testing.T) {
 	}
 }
 
+func TestDir(t *testing.T) {
+	cases := []struct {
+		h     harness.ID
+		scope Scope
+		kind  ir.Kind
+		want  string
+	}{
+		{harness.Claude, ScopeUser, ir.KindSkill, ".claude/skills"},
+		{harness.Claude, ScopeProject, ir.KindCommand, ".claude/commands"},
+		{harness.Codex, ScopeUser, ir.KindAgent, ".codex/agents"},
+		{harness.Antigravity, ScopeUser, ir.KindSkill, ".gemini/config/skills"},
+		{harness.Antigravity, ScopeProject, ir.KindAgent, ".agents/agents"},
+	}
+	for _, c := range cases {
+		l, _ := For(c.h)
+		if got, err := l.Dir(c.scope, c.kind); err != nil || got != filepath.FromSlash(c.want) {
+			t.Errorf("%s %s %s Dir = %q, %v; want %q", c.h, c.scope, c.kind, got, err, c.want)
+		}
+	}
+	cl, _ := For(harness.Claude)
+	if _, err := cl.Dir(ScopeUser, ir.KindInstructions); err == nil {
+		t.Error("Dir(instructions) succeeded; instructions have no per-item directory")
+	}
+	ag, _ := For(harness.Antigravity)
+	if _, err := ag.Dir(ScopeUser, ir.KindCommand); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("Antigravity command Dir error = %v; want ErrUnsupported", err)
+	}
+	if _, err := cl.Dir("", ir.KindSkill); err == nil {
+		t.Error("Dir accepted an empty scope")
+	}
+}
+
 func TestParseScope(t *testing.T) {
 	for _, s := range []string{"user", "project"} {
 		if got, err := ParseScope(s); err != nil || string(got) != s {

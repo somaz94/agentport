@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -78,16 +77,20 @@ func TestMapErrors(t *testing.T) {
 	}
 }
 
-func TestExecute(t *testing.T) {
-	saved := os.Args
-	defer func() { os.Args = saved }()
-
-	os.Args = []string{"agentport", "version"}
-	if err := Execute(); err != nil {
-		t.Errorf("Execute(version) = %v", err)
+func TestRunMainExitCodes(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := runMain([]string{"version"}, &stdout, &stderr); code != 0 {
+		t.Errorf("version exit = %d", code)
 	}
-	os.Args = []string{"agentport", "no-such-command"}
-	if err := Execute(); err == nil {
-		t.Error("Execute(no-such-command) succeeded")
+	if code := runMain([]string{"no-such-command"}, &stdout, &stderr); code != 1 || !strings.Contains(stderr.String(), "unknown command") {
+		t.Errorf("unknown command exit = %d, stderr %q", code, stderr.String())
+	}
+	stderr.Reset()
+	lossy := filepath.Join("..", "..", "internal", "convert", "testdata", "skills", "claude-basic", "skill")
+	if code := runMain([]string{"convert", lossy, "--from", "claude", "--to", "codex", "--strict"}, &stdout, &stderr); code != 2 || !strings.Contains(stderr.String(), "lossy") {
+		t.Errorf("--strict on a lossy conversion exit = %d, stderr %q", code, stderr.String())
+	}
+	if (&exitError{code: 2}).Error() != "exit 2" {
+		t.Error("exitError without a cause does not name its code")
 	}
 }

@@ -42,6 +42,8 @@ Fixtures are written by hand. Do not copy a real harness configuration into `tes
 
 Every row in `docs/spec/` names its evidence. To re-verify Antigravity, run its bundled language server against a scratch config root and read the parsed result back over its local RPC; the exact commands are in the Reproduce section of [spec/antigravity.md](spec/antigravity.md). Codex facts are checked against the source at the pinned tag, Claude Code facts against its docs and binary.
 
+`make e2e-antigravity` does this for the converter: it writes every skill fixture as an Antigravity skill into a scratch root, starts the desktop app's language server against it, and checks that the loader parsed each one with the expected flags. It needs the Antigravity desktop app (macOS path by default; override `AG_LANGUAGE_SERVER`) and is skipped by `make test` and CI.
+
 <br/>
 
 ## Workflow

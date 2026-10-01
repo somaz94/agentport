@@ -50,6 +50,7 @@ No key is required. `name` defaults to the directory name; a missing `descriptio
 | `context`, `agent`, `background` | `context: fork` runs in a subagent of type `agent` | docs |
 | `hooks`, `paths`, `shell` | Invocation hooks, auto-activation globs, `bash` / `powershell` | docs |
 | `license`, `compatibility`, `metadata` | Agent Skills spec fields; accepted, not acted on | docs |
+| `version` | Accepted and kept as bookkeeping, not surfaced to users | binary |
 
 The portable subset accepted by claude.ai uploads and the Skills API is `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`; any other key is a hard error there (docs).
 
@@ -61,7 +62,7 @@ agentport's reader repairs only when the strict parse fails, then single-quotes 
 
 ## Body substitution
 
-Applied to command and skill bodies, in this order (binary): base-directory line (skills only) → arguments → `${CLAUDE_SKILL_DIR}`, `${CLAUDE_PROJECT_DIR}`, `${CLAUDE_SESSION_ID}`, `${CLAUDE_EFFORT}` → shell injection.
+Applied to command and skill bodies, in this order (binary): base-directory line (skills only) → arguments → `${CLAUDE_SKILL_DIR}`, `${CLAUDE_PROJECT_DIR}`, `${CLAUDE_SESSION_ID}`, `${CLAUDE_EFFORT}` → shell injection. Plugin skills also get `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_DATA}` (docs).
 
 | Syntax | Meaning | Evidence |
 |---|---|---|

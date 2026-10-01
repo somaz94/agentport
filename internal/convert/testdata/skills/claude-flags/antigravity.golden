@@ -1,0 +1,68 @@
+== SKILL.md (0644)
+---
+name: flagged-skill
+description: 'Run the flagged workflow'
+disable-model-invocation: true
+disable-slash-command: true
+---
+<!-- agentport:args:begin -->
+> **Arguments**: invoked as `/flagged-skill [first | second]`. The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text. `$0`, `$1`, … and `$ARGUMENTS[N]` are those arguments split like shell words, counting from zero.
+<!-- agentport:args:end -->
+
+## Run the flagged workflow
+
+Compare $1 with $ARGUMENTS[1].
+
+Current branch: !`git branch --show-current`
+== loss report
+[
+  {
+    "source": "Claude Code skill flagged-skill",
+    "target": "Antigravity skill flagged-skill",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "transformed",
+        "detail": "missing; used the first body line, as Claude Code does"
+      },
+      {
+        "field": "model",
+        "status": "dropped",
+        "detail": "Antigravity has no counterpart"
+      },
+      {
+        "field": "body",
+        "status": "transformed",
+        "detail": "Antigravity does not substitute $ARGUMENTS; a marked preamble explains it"
+      },
+      {
+        "field": "body",
+        "status": "approximated",
+        "detail": "positional and named arguments are explained, not split, by the target"
+      },
+      {
+        "field": "argument-hint",
+        "status": "transformed",
+        "detail": "moved into the arguments preamble"
+      },
+      {
+        "field": "body",
+        "status": "approximated",
+        "detail": "Antigravity does not run !`command` injection; the text stays as written"
+      },
+      {
+        "field": "disable-model-invocation",
+        "status": "mapped"
+      },
+      {
+        "field": "user-invocable",
+        "status": "transformed",
+        "detail": "became disable-slash-command: true"
+      }
+    ]
+  }
+]

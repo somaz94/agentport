@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/somaz94/agentport/internal/harness"
 )
 
@@ -99,6 +101,20 @@ type Resource struct {
 	Data []byte
 }
 
+// Field is a frontmatter key the IR does not model, kept with its YAML value in source order so
+// writing back to the source harness loses nothing.
+type Field struct {
+	Key   string
+	Value *yaml.Node
+}
+
+// Note is something a reader could not carry into the IR, such as a bundled file it skipped.
+// Writers report each note as a warning.
+type Note struct {
+	Field  string
+	Detail string
+}
+
 // Source records where an item was read from.
 type Source struct {
 	Harness harness.ID
@@ -115,11 +131,21 @@ type Item struct {
 	// Tools is nil for kinds that carry no tool list.
 	Tools *ToolSet
 	// Model is the source value verbatim; empty means inherit.
-	Model     string
-	Resources []Resource
-	// Extensions keeps source-only frontmatter so a round trip back to the source loses nothing.
-	Extensions map[string]any
+	Model      string
+	Resources  []Resource
+	Extensions []Field
+	Notes      []Note
 	Source     Source
+}
+
+// Extension returns the value of an unmodelled frontmatter key.
+func (i *Item) Extension(key string) (*yaml.Node, bool) {
+	for _, f := range i.Extensions {
+		if f.Key == key {
+			return f.Value, true
+		}
+	}
+	return nil, false
 }
 
 var skillName = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)

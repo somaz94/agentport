@@ -1,0 +1,45 @@
+== SKILL.md (0644)
+---
+name: ag-skill
+description: 'An Antigravity skill hidden from the slash menu.'
+argument-hint: '[topic]'
+user-invocable: false
+metadata:
+  icon: star
+---
+Explain $ARGUMENTS briefly.
+== loss report
+[
+  {
+    "source": "Antigravity skill ag-skill",
+    "target": "Claude Code skill ag-skill",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "argument-hint",
+        "status": "mapped"
+      },
+      {
+        "field": "user-invocable",
+        "status": "transformed",
+        "detail": "the source hid the skill from its command menu"
+      },
+      {
+        "field": "metadata",
+        "status": "mapped"
+      },
+      {
+        "field": "body",
+        "status": "transformed",
+        "detail": "removed the agentport arguments preamble; Claude Code substitutes $ARGUMENTS itself"
+      }
+    ]
+  }
+]

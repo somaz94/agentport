@@ -1,0 +1,44 @@
+== SKILL.md (0644)
+---
+name: codex-skill
+description: 'A Codex skill the model never picks on its own.'
+disable-model-invocation: true
+metadata:
+  short-description: Manual only
+---
+Do the manual thing.
+== agents/openai.yaml (0644)
+interface:
+  display_name: Codex Skill
+policy:
+  allow_implicit_invocation: false
+== loss report
+[
+  {
+    "source": "Codex skill codex-skill",
+    "target": "Claude Code skill codex-skill",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "disable-model-invocation",
+        "status": "mapped"
+      },
+      {
+        "field": "metadata",
+        "status": "mapped"
+      },
+      {
+        "field": "agents/openai.yaml",
+        "status": "mapped",
+        "detail": "kept as a bundled file for Codex; Claude Code ignores it"
+      }
+    ]
+  }
+]

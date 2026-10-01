@@ -119,12 +119,39 @@ func (l Layout) Path(scope Scope, kind ir.Kind, name string) (string, error) {
 		return "", fmt.Errorf("%s %s at %s scope: %w", l.Harness.Title(), kind, scope, ErrUnsupported)
 	}
 	if strings.Contains(p, "<name>") {
-		if name == "." || strings.ContainsAny(name, `/\`) || !filepath.IsLocal(name) {
-			return "", fmt.Errorf("%w: %q", ErrInvalidName, name)
+		if err := ValidName(name); err != nil {
+			return "", err
 		}
 		p = strings.ReplaceAll(p, "<name>", name)
 	}
 	return filepath.FromSlash(p), nil
+}
+
+// Dir returns the directory that holds every item of kind, relative to the scope's root:
+// `.claude/skills` for Claude skills, `.codex/agents` for Codex agents.
+func (l Layout) Dir(scope Scope, kind ir.Kind) (string, error) {
+	table, err := l.table(scope)
+	if err != nil {
+		return "", err
+	}
+	p, ok := table[kind]
+	if !ok {
+		return "", fmt.Errorf("%s %s at %s scope: %w", l.Harness.Title(), kind, scope, ErrUnsupported)
+	}
+	i := strings.Index(p, "/<name>")
+	if i < 0 {
+		return "", fmt.Errorf("%s %s has no per-item directory", l.Harness.Title(), kind)
+	}
+	return filepath.FromSlash(p[:i]), nil
+}
+
+// ValidName reports whether name can be a single directory or file name inside an item directory.
+// Item names come from frontmatter, so anything that could climb out of the directory is refused.
+func ValidName(name string) error {
+	if name == "." || strings.ContainsAny(name, `/\`) || !filepath.IsLocal(name) {
+		return fmt.Errorf("%w: %q", ErrInvalidName, name)
+	}
+	return nil
 }
 
 // Supports reports whether l has a location for kind at scope.
@@ -137,7 +164,7 @@ func (l Layout) Supports(scope Scope, kind ir.Kind) bool {
 	return ok
 }
 
-// Deprecated lists locations the harness still reads or used to read; `doctor` warns on them.
+// Deprecated lists locations the harness still reads or used to read, for the planned `doctor` check.
 // Entries starting with `~/` are user scope, the rest project scope.
 func (l Layout) Deprecated() []string {
 	return slices.Clone(l.deprecated)

@@ -1,0 +1,70 @@
+== SKILL.md (0644)
+---
+name: flagged-skill
+description: 'Run the flagged workflow'
+---
+<!-- agentport:args:begin -->
+> **Arguments**: invoked as `$flagged-skill [first | second]`. The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text. `$0`, `$1`, … and `$ARGUMENTS[N]` are those arguments split like shell words, counting from zero.
+<!-- agentport:args:end -->
+
+## Run the flagged workflow
+
+Compare $1 with $ARGUMENTS[1].
+
+Current branch: !`git branch --show-current`
+== agents/openai.yaml (0644)
+policy:
+  allow_implicit_invocation: false
+== loss report
+[
+  {
+    "source": "Claude Code skill flagged-skill",
+    "target": "Codex skill flagged-skill",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "transformed",
+        "detail": "missing; used the first body line, as Claude Code does"
+      },
+      {
+        "field": "model",
+        "status": "dropped",
+        "detail": "Codex has no counterpart"
+      },
+      {
+        "field": "body",
+        "status": "transformed",
+        "detail": "Codex does not substitute $ARGUMENTS; a marked preamble explains it"
+      },
+      {
+        "field": "body",
+        "status": "approximated",
+        "detail": "positional and named arguments are explained, not split, by the target"
+      },
+      {
+        "field": "argument-hint",
+        "status": "transformed",
+        "detail": "moved into the arguments preamble"
+      },
+      {
+        "field": "body",
+        "status": "approximated",
+        "detail": "Codex does not run !`command` injection; the text stays as written"
+      },
+      {
+        "field": "user-invocable",
+        "status": "dropped",
+        "detail": "Codex cannot hide a skill from the $ menu"
+      },
+      {
+        "field": "disable-model-invocation",
+        "status": "transformed",
+        "detail": "became policy.allow_implicit_invocation: false in agents/openai.yaml"
+      }
+    ]
+  }
+]

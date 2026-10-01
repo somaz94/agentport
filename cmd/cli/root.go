@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -38,15 +37,6 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 	root.PersistentFlags().StringVarP(&opts.output, "output", "o", outputText, "output format: text or json")
-	root.AddCommand(newVersionCmd(opts), newMapCmd(opts))
+	root.AddCommand(newVersionCmd(opts), newMapCmd(opts), newConvertCmd(opts), newScanCmd(opts))
 	return root
-}
-
-// Execute runs the root command and prints any error to stderr.
-func Execute() error {
-	if err := NewRootCmd().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
-		return err
-	}
-	return nil
 }

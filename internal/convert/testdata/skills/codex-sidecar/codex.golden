@@ -1,0 +1,43 @@
+== SKILL.md (0644)
+---
+name: codex-skill
+description: 'A Codex skill the model never picks on its own.'
+metadata:
+  short-description: Manual only
+---
+Do the manual thing.
+== agents/openai.yaml (0644)
+interface:
+  display_name: Codex Skill
+policy:
+  allow_implicit_invocation: false
+== loss report
+[
+  {
+    "source": "Codex skill codex-skill",
+    "target": "Codex skill codex-skill",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "metadata",
+        "status": "mapped"
+      },
+      {
+        "field": "resources",
+        "status": "mapped",
+        "detail": "1 bundled file(s) copied byte for byte with their modes"
+      },
+      {
+        "field": "policy.allow_implicit_invocation",
+        "status": "mapped"
+      }
+    ]
+  }
+]

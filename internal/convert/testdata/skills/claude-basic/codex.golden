@@ -1,0 +1,74 @@
+== SKILL.md (0644)
+---
+name: demo-skill
+description: 'Scan a path: report findings. Use when the user asks to scan. Before publishing a repository.'
+license: Apache-2.0
+metadata:
+  short-description: Scan for findings
+---
+<!-- agentport:args:begin -->
+> **Arguments**: invoked as `$demo-skill [path | --all]`. The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text.
+<!-- agentport:args:end -->
+
+# Demo skill
+
+Scan $ARGUMENTS and report each finding.
+
+Run [the helper](scripts/run.sh) for the heavy lifting.
+== references/guide.md (0644)
+# Guide
+
+Reference material.
+== scripts/run.sh (0755)
+#!/usr/bin/env bash
+echo "scanning $1"
+== loss report
+[
+  {
+    "source": "Claude Code skill demo-skill",
+    "target": "Codex skill demo-skill",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "when_to_use",
+        "status": "transformed",
+        "detail": "appended to description, as Claude Code does in its listing"
+      },
+      {
+        "field": "allowed-tools",
+        "status": "dropped",
+        "detail": "Codex has no counterpart"
+      },
+      {
+        "field": "license",
+        "status": "mapped"
+      },
+      {
+        "field": "metadata",
+        "status": "mapped"
+      },
+      {
+        "field": "body",
+        "status": "transformed",
+        "detail": "Codex does not substitute $ARGUMENTS; a marked preamble explains it"
+      },
+      {
+        "field": "argument-hint",
+        "status": "transformed",
+        "detail": "moved into the arguments preamble"
+      },
+      {
+        "field": "resources",
+        "status": "mapped",
+        "detail": "2 bundled file(s) copied byte for byte with their modes"
+      }
+    ]
+  }
+]

@@ -1,0 +1,48 @@
+== SKILL.md (0644)
+---
+name: ag-skill
+description: 'An Antigravity skill hidden from the slash menu.'
+metadata:
+  icon: star
+disable-slash-command: true
+---
+<!-- agentport:args:begin -->
+> **Arguments**: invoked as `/ag-skill [topic]`. The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text.
+<!-- agentport:args:end -->
+
+Explain $ARGUMENTS briefly.
+== loss report
+[
+  {
+    "source": "Antigravity skill ag-skill",
+    "target": "Antigravity skill ag-skill",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "metadata",
+        "status": "mapped"
+      },
+      {
+        "field": "body",
+        "status": "transformed",
+        "detail": "Antigravity does not substitute $ARGUMENTS; a marked preamble explains it"
+      },
+      {
+        "field": "argument-hint",
+        "status": "transformed",
+        "detail": "moved into the arguments preamble"
+      },
+      {
+        "field": "disable-slash-command",
+        "status": "mapped"
+      }
+    ]
+  }
+]

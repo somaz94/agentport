@@ -36,7 +36,7 @@ Existing tools were considered first. rulesync supports all three harnesses but 
 `reader(harness A) → IR → writer(harness B) + loss report`
 
 - The IR (`internal/ir`) carries kind, name, description, body, invocation policy, a tool set expressed as capabilities (read, search, glob, shell, edit, write, web fetch, web search, delegate, ask user, plan), the model, bundled resources byte for byte with their file modes, and `Extensions` for source-only fields so a round trip back to the source loses nothing.
-- Each source field ends in exactly one loss status: `mapped`, `transformed`, `approximated`, `dropped` or `warn`. Reports are available as text and JSON.
+- Every loss entry names a field and one status: `mapped`, `transformed`, `approximated`, `dropped` or `warn`. A field can collect several entries — a body can be both transformed (the arguments preamble) and approximated (shell injection the target does not run). Reports are available as text and JSON.
 - Locations come only from the version-pinned table in `internal/paths`. Antigravity's directories have moved several times; a move is a one-row change there plus a `doctor` warning for the old location.
 - Frontmatter is read leniently, with the same repair pass Claude Code and Codex apply, and written as strict YAML with `description` single-quoted.
 
@@ -49,8 +49,10 @@ Existing tools were considered first. rulesync supports all three harnesses but 
 ### Skill → skill
 
 - The skill directory is copied byte for byte, executable bits included. Claude's `skills/synced/` (skills managed by claude.ai) is never a source.
-- `name` and `description` carry over. `disable-model-invocation: true` stays as-is for Antigravity, which supports it, and becomes `policy.allow_implicit_invocation: false` in Codex's `agents/openai.yaml` sidecar. `user-invocable: false` becomes Antigravity's `disable-slash-command: true`; Codex has no counterpart. `allowed-tools` and `argument-hint` are dropped, the hint surviving in the arguments preamble below.
-- Antigravity does not validate names and Codex only caps their length, so the writer applies the Agent Skills rule (lowercase letters, digits, single hyphens, 64 characters) itself.
+- `name` and `description` carry over. `disable-model-invocation: true` stays as-is for Antigravity, which supports it, and becomes `policy.allow_implicit_invocation: false` in Codex's `agents/openai.yaml` sidecar. `user-invocable: false` becomes Antigravity's `disable-slash-command: true`; Codex has no counterpart. `allowed-tools` and `argument-hint` are dropped, the hint surviving in the arguments preamble below, from which the Codex and Antigravity readers recover it.
+- Antigravity does not validate names and Codex only caps their length, so the writer warns when a name breaks the Agent Skills rule (lowercase letters, digits, single hyphens, 64 characters). A name that is not a safe directory name (`..`, a slash) is an error: names come from frontmatter and become directories.
+- A Codex sidecar is never loosened: if a skill from another harness bundles `agents/openai.yaml` with implicit invocation off, the Codex output keeps it off and says so. Other targets keep a user-written sidecar as a bundled file (a project `.agents/skills` is read by Codex too) and skip the one-line sidecar agentport generates, whose meaning already lives in the invocation flags.
+- Skill directories are read through symlinks; a symlinked subdirectory or special file inside one is skipped with a warning. Output is never written through a symlink.
 
 <br/>
 
@@ -61,13 +63,12 @@ Existing tools were considered first. rulesync supports all three harnesses but 
 
   ```markdown
   <!-- agentport:args:begin -->
-  ## Arguments
-  Invoked as `/commit [scope-hint | recommend-only]`. The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text.
+  > **Arguments**: invoked as `/commit [scope-hint | recommend-only]`. The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text.
   <!-- agentport:args:end -->
   ```
 
-  The preamble is safe to add even when the body has no placeholder, because Claude Code itself appends the arguments in that case. Positional arguments, `` !`cmd` `` injection and `@file` references produce an `approximated` entry.
-- Codex model invocation is off by default for converted commands, so a mutating workflow never starts from a description match alone. Antigravity cannot turn it off for a skill with a slash command, which is a `warn`.
+  A blockquote rather than a heading, so the preamble does not sit above the body's own title. Codex invokes skills as `$name`, so its preamble says so. Skills get the same preamble when their body uses a placeholder. Positional arguments, `` !`cmd` `` injection and `@file` references produce an `approximated` entry.
+- Converted commands are not model-invocable by default in either target — the Codex sidecar policy, Antigravity's `disable-model-invocation: true` — so a mutating workflow never starts from a description match alone. A setting in the config can turn it back on.
 - An unquoted bracketed `argument-hint` is valid YAML and parses as a one-element sequence; the reader accepts that shape.
 
 <br/>

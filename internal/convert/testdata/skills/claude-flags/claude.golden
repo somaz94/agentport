@@ -1,0 +1,42 @@
+== SKILL.md (0644)
+---
+name: flagged-skill
+argument-hint: '[first | second]'
+disable-model-invocation: true
+user-invocable: false
+model: haiku
+---
+## Run the flagged workflow
+
+Compare $1 with $ARGUMENTS[1].
+
+Current branch: !`git branch --show-current`
+== loss report
+[
+  {
+    "source": "Claude Code skill flagged-skill",
+    "target": "Claude Code skill flagged-skill",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "argument-hint",
+        "status": "mapped"
+      },
+      {
+        "field": "disable-model-invocation",
+        "status": "mapped"
+      },
+      {
+        "field": "user-invocable",
+        "status": "mapped"
+      },
+      {
+        "field": "model",
+        "status": "mapped"
+      }
+    ]
+  }
+]
