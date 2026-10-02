@@ -1,0 +1,54 @@
+== planner.md (0644)
+---
+name: planner
+description: 'Plans a change, then hands review to another agent.'
+tools:
+  - view_file
+  - grep_search
+  - find_by_name
+  - list_dir
+  - run_command
+  - manage_task
+  - replace_file_content
+  - write_to_file
+  - read_url_content
+  - search_web
+  - invoke_subagent
+  - ask_question
+mainAgent: false
+---
+Break the request into steps. When something is unclear, ask with AskUserQuestion.
+
+When the plan is done, delegate the review to `code-reviewer`.
+== loss report
+[
+  {
+    "source": "Claude Code agent planner",
+    "target": "Antigravity agent planner",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "tools",
+        "status": "transformed",
+        "detail": "every tool, listed by name: without a list Antigravity grants no shell, search or edit tool"
+      },
+      {
+        "field": "mainAgent",
+        "status": "mapped",
+        "detail": "false: a subagent stays out of the agent picker, as in the source"
+      },
+      {
+        "field": "body",
+        "status": "warn",
+        "detail": "mentions Claude Code's AskUserQuestion; Antigravity calls it ask_question"
+      }
+    ]
+  }
+]

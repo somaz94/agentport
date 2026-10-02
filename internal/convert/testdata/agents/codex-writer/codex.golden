@@ -1,0 +1,52 @@
+== patch-writer.toml (0644)
+name = "patch-writer"
+description = "Writes a patch from a precise description; never runs commands."
+model = "gpt-5-codex"
+model_reasoning_effort = "high"
+nickname_candidates = ["Ada", "Lin"]
+developer_instructions = '''
+Write the smallest patch that matches the description.
+Keep "quoted" text and \escapes exactly as given.
+'''
+
+[features]
+apps = false
+shell_tool = false
+== loss report
+[
+  {
+    "source": "Codex agent patch-writer",
+    "target": "Codex agent patch-writer",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "model",
+        "status": "mapped"
+      },
+      {
+        "field": "model_reasoning_effort",
+        "status": "mapped"
+      },
+      {
+        "field": "nickname_candidates",
+        "status": "mapped"
+      },
+      {
+        "field": "features",
+        "status": "mapped"
+      },
+      {
+        "field": "body",
+        "status": "mapped",
+        "detail": "became developer_instructions"
+      }
+    ]
+  }
+]

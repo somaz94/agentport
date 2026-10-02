@@ -1,0 +1,41 @@
+== web-researcher.toml (0644)
+name = "web-researcher"
+description = "Looks things up on the web and summarizes the sources."
+developer_instructions = '''
+Search, read the top sources, and summarize them with links.
+'''
+
+[features]
+shell_tool = false
+== loss report
+[
+  {
+    "source": "Claude Code agent web-researcher",
+    "target": "Codex agent web-researcher",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "body",
+        "status": "mapped",
+        "detail": "became developer_instructions"
+      },
+      {
+        "field": "tools",
+        "status": "dropped",
+        "detail": "Codex has no per-role tool list"
+      },
+      {
+        "field": "tools",
+        "status": "transformed",
+        "detail": "became [features] shell_tool = false: the agent had no file or shell tool"
+      }
+    ]
+  }
+]

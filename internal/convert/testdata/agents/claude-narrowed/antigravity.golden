@@ -1,0 +1,53 @@
+== git-helper.md (0644)
+---
+name: git-helper
+description: 'Answers questions about the repository history.'
+tools:
+  - run_command
+  - manage_task
+  - invoke_subagent
+mainAgent: false
+---
+Answer from `git log` and `git show` output only.
+== loss report
+[
+  {
+    "source": "Claude Code agent git-helper",
+    "target": "Antigravity agent git-helper",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "tools",
+        "status": "transformed",
+        "detail": "Claude Code tool names written as Antigravity's"
+      },
+      {
+        "field": "tools",
+        "status": "approximated",
+        "detail": "Antigravity cannot narrow a tool, so these are granted whole: Bash(git log *), Bash(git show *)"
+      },
+      {
+        "field": "tools",
+        "status": "dropped",
+        "detail": "no Antigravity counterpart: NotebookEdit, mcp__tracker__get_issue"
+      },
+      {
+        "field": "disallowedTools",
+        "status": "transformed",
+        "detail": "the denied tools were left out of tools"
+      },
+      {
+        "field": "mainAgent",
+        "status": "mapped",
+        "detail": "false: a subagent stays out of the agent picker, as in the source"
+      }
+    ]
+  }
+]

@@ -1,0 +1,43 @@
+== read-only-reviewer.toml (0644)
+name = "read-only-reviewer"
+description = "Reviews anything it is given and never changes files."
+developer_instructions = '''
+Read what you are given and report findings; do not edit anything.
+'''
+== loss report
+[
+  {
+    "source": "Claude Code agent read-only-reviewer",
+    "target": "Codex agent read-only-reviewer",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "disallowedTools",
+        "status": "dropped",
+        "detail": "Codex has no per-role tool list"
+      },
+      {
+        "field": "body",
+        "status": "mapped",
+        "detail": "became developer_instructions"
+      },
+      {
+        "field": "tools",
+        "status": "dropped",
+        "detail": "Codex has no per-role tool list"
+      },
+      {
+        "field": "tools",
+        "status": "warn",
+        "detail": "read-only cannot be enforced: every Codex role can edit files with apply_patch"
+      }
+    ]
+  }
+]

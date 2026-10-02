@@ -9,12 +9,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/somaz94/agentport/internal/adapters/common"
+	"github.com/somaz94/agentport/internal/frontmatter"
 	"github.com/somaz94/agentport/internal/harness"
+	"github.com/somaz94/agentport/internal/ir"
 	"github.com/somaz94/agentport/internal/skilldir"
 )
 
@@ -90,6 +93,20 @@ func TestAntigravityLoadsConvertedSkills(t *testing.T) {
 
 func loadSkills(t *testing.T, bin, root string) map[string]loadedSkill {
 	t.Helper()
+	var body struct {
+		Skills []loadedSkill `json:"skills"`
+	}
+	rpc(t, startServer(t, bin, root), "GetAllSkills", &body)
+	out := map[string]loadedSkill{}
+	for _, s := range body.Skills {
+		out[s.Name] = s
+	}
+	return out
+}
+
+// startServer runs the language server against the config root and returns its base URL.
+func startServer(t *testing.T, bin, root string) string {
+	t.Helper()
 	port, cdp := freePort(t), freePort(t)
 	for _, d := range []string{"home", "ws"} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
@@ -114,36 +131,144 @@ func loadSkills(t *testing.T, bin, root string) map[string]loadedSkill {
 	for {
 		if resp, err := client.Get(base + "/healthz"); err == nil {
 			resp.Body.Close()
-			break
+			return base
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("language server did not start:\n%s", logs.String())
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
+}
 
-	req, _ := http.NewRequest(http.MethodPost, base+"/exa.language_server_pb.LanguageServerService/GetAllSkills", strings.NewReader("{}"))
+// rpc calls method on the language server and decodes the JSON reply into out.
+func rpc(t *testing.T, base, method string, out any) {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodPost, base+"/exa.language_server_pb.LanguageServerService/"+method, strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-codeium-csrf-token", "agentport-e2e")
-	resp, err := client.Do(req)
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GetAllSkills returned %s", resp.Status)
+		t.Fatalf("%s returned %s", method, resp.Status)
 	}
-	var body struct {
-		Skills []loadedSkill `json:"skills"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 		t.Fatal(err)
 	}
-	out := map[string]loadedSkill{}
-	for _, s := range body.Skills {
-		out[s.Name] = s
+}
+
+type agentScript struct {
+	Name      string `json:"name"`
+	ModelTier string `json:"modelTier"`
+	Config    struct {
+		AgentConfig struct {
+			MixinConfig struct {
+				Tools []struct {
+					Name string `json:"name"`
+				} `json:"tools"`
+			} `json:"mixinConfig"`
+		} `json:"agentConfig"`
+	} `json:"config"`
+}
+
+// TestAntigravityLoadsConvertedAgents writes every agent fixture as an Antigravity agent and checks
+// that the loader enables each one. The agent picker, the only place the parsed tools and model
+// show, lists main agents alone, so a copy of each with `mainAgent: true` checks those too.
+func TestAntigravityLoadsConvertedAgents(t *testing.T) {
+	bin := os.Getenv(LanguageServerEnv)
+	if bin == "" {
+		t.Skipf("set %s to the Antigravity language server to run this test", LanguageServerEnv)
 	}
-	return out
+	root := t.TempDir()
+	agentsDir := filepath.Join(root, "gemini", "config", "agents")
+	wantTools := map[string][]string{}
+	wantTier := map[string]string{}
+	subagents := map[string]bool{}
+	var written []string
+	for name := range agentCases {
+		res, err := Agent(readAgentCase(t, name), harness.Antigravity, Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := skilldir.Write(agentsDir, res.Files); err != nil {
+			t.Fatal(err)
+		}
+		doc, err := frontmatter.Parse(res.Files[0].Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		agent, _ := doc.Scalar("name")
+		written = append(written, agent, "picker-"+agent)
+		if main, _ := doc.Scalar("mainAgent"); main == "false" {
+			subagents[agent] = true
+		}
+		pick := "picker-" + agent
+		doc.SetString("name", pick)
+		doc.Set("mainAgent", common.BoolNode(true))
+		data, err := doc.Marshal()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := skilldir.Write(agentsDir, []ir.Resource{{Path: pick + ".md", Data: data}}); err != nil {
+			t.Fatal(err)
+		}
+		if n, ok := doc.Get("tools"); ok {
+			for _, c := range n.Content {
+				wantTools[pick] = append(wantTools[pick], c.Value)
+			}
+		}
+		model, _ := doc.Scalar("model")
+		// The reply omits the default tier, inherit.
+		wantTier[pick] = map[string]string{"flash": "MODEL_TIER_FLASH"}[model]
+	}
+
+	base := startServer(t, bin, root)
+	var states struct {
+		States []struct {
+			Type, Name, Status string
+		} `json:"states"`
+	}
+	rpc(t, base, "GetCustomizationStates", &states)
+	enabled := map[string]bool{}
+	for _, s := range states.States {
+		if s.Type == "REFRESH_CUSTOMIZATION_TYPE_AGENT" && s.Status == "STATUS_ENABLED" {
+			enabled[s.Name] = true
+		}
+	}
+	var scripts struct {
+		AgentScripts []agentScript `json:"agentScripts"`
+	}
+	rpc(t, base, "GetAgentScripts", &scripts)
+	picked := map[string]agentScript{}
+	for _, s := range scripts.AgentScripts {
+		picked[s.Name] = s
+	}
+	for _, name := range written {
+		if !enabled[name] {
+			t.Errorf("Antigravity did not enable %s", name)
+		}
+	}
+	for pick, tools := range wantTools {
+		agent := strings.TrimPrefix(pick, "picker-")
+		s, ok := picked[pick]
+		var got []string
+		for _, tool := range s.Config.AgentConfig.MixinConfig.Tools {
+			got = append(got, tool.Name)
+		}
+		if !ok || !slices.Equal(got, tools) {
+			t.Errorf("%s loaded with tools %v; want %v", agent, got, tools)
+		}
+		if s.ModelTier != wantTier[pick] {
+			t.Errorf("%s loaded with model tier %s; want %s", agent, s.ModelTier, wantTier[pick])
+		}
+	}
+	for agent := range subagents {
+		if _, ok := picked[agent]; ok {
+			t.Errorf("%s was written with mainAgent: false but is in the agent picker", agent)
+		}
+	}
 }
 
 func freePort(t *testing.T) int {

@@ -1,0 +1,40 @@
+== planner.toml (0644)
+name = "planner"
+description = "Plans a change, then hands review to another agent."
+developer_instructions = '''
+Break the request into steps. When something is unclear, ask with AskUserQuestion.
+
+When the plan is done, delegate the review to `code-reviewer`.
+'''
+== loss report
+[
+  {
+    "source": "Claude Code agent planner",
+    "target": "Codex agent planner",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "body",
+        "status": "mapped",
+        "detail": "became developer_instructions"
+      },
+      {
+        "field": "tools",
+        "status": "mapped",
+        "detail": "every tool; a Codex role cannot be restricted anyway"
+      },
+      {
+        "field": "body",
+        "status": "warn",
+        "detail": "mentions Claude Code's AskUserQuestion; Codex calls it request_user_input (root thread and Plan mode only)"
+      }
+    ]
+  }
+]

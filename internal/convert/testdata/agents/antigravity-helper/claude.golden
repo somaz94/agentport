@@ -1,0 +1,55 @@
+== docs-helper.md (0644)
+---
+name: docs-helper
+description: 'Finds and explains documentation: API pages, READMEs, changelogs.'
+tools: Read, Grep, Bash
+skills:
+  - doc-style
+---
+Find the relevant documentation and explain it in plain words.
+== loss report
+[
+  {
+    "source": "Antigravity agent docs-helper",
+    "target": "Claude Code agent docs-helper",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "tools",
+        "status": "transformed",
+        "detail": "Antigravity tool names written as Claude Code's"
+      },
+      {
+        "field": "tools",
+        "status": "dropped",
+        "detail": "no Claude Code counterpart: schedule"
+      },
+      {
+        "field": "model",
+        "status": "approximated",
+        "detail": "Claude Code has no flash model; the agent gets Claude Code's default subagent model"
+      },
+      {
+        "field": "skills",
+        "status": "mapped"
+      },
+      {
+        "field": "mainAgent",
+        "status": "dropped",
+        "detail": "Antigravity-only field"
+      },
+      {
+        "field": "inheritMcp",
+        "status": "dropped",
+        "detail": "Antigravity-only field"
+      }
+    ]
+  }
+]

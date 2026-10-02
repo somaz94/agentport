@@ -1,0 +1,65 @@
+== patch-writer.md (0644)
+---
+name: patch-writer
+description: 'Writes a patch from a precise description; never runs commands.'
+tools:
+  - replace_file_content
+  - write_to_file
+  - search_web
+  - invoke_subagent
+mainAgent: false
+---
+Write the smallest patch that matches the description.
+Keep "quoted" text and \escapes exactly as given.
+== loss report
+[
+  {
+    "source": "Codex agent patch-writer",
+    "target": "Antigravity agent patch-writer",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "tools",
+        "status": "transformed",
+        "detail": "Codex tool names written as Antigravity's"
+      },
+      {
+        "field": "model",
+        "status": "approximated",
+        "detail": "Antigravity has no gpt-5-codex model; the agent inherits the conversation's model"
+      },
+      {
+        "field": "effort",
+        "status": "dropped",
+        "detail": "Antigravity has no reasoning effort setting"
+      },
+      {
+        "field": "nickname_candidates",
+        "status": "dropped",
+        "detail": "Codex-only field"
+      },
+      {
+        "field": "features",
+        "status": "transformed",
+        "detail": "shell_tool is reflected in tools"
+      },
+      {
+        "field": "features",
+        "status": "dropped",
+        "detail": "no counterpart: apps"
+      },
+      {
+        "field": "mainAgent",
+        "status": "mapped",
+        "detail": "false: a subagent stays out of the agent picker, as in the source"
+      }
+    ]
+  }
+]

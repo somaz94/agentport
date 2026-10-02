@@ -1,0 +1,53 @@
+== release-runner.md (0644)
+---
+name: release-runner
+description: 'Runs the release checklist and fixes what fails.'
+tools: Bash, Read, Edit, Write
+model: sonnet
+effort: max
+color: blue
+permissionMode: acceptEdits
+skills: [changelog-style]
+---
+Run the release checklist in order. Stop at the first failure, fix it, and run the step again.
+== loss report
+[
+  {
+    "source": "Claude Code agent release-runner",
+    "target": "Claude Code agent release-runner",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "tools",
+        "status": "mapped"
+      },
+      {
+        "field": "model",
+        "status": "mapped"
+      },
+      {
+        "field": "effort",
+        "status": "mapped"
+      },
+      {
+        "field": "color",
+        "status": "mapped"
+      },
+      {
+        "field": "permissionMode",
+        "status": "mapped"
+      },
+      {
+        "field": "skills",
+        "status": "mapped"
+      }
+    ]
+  }
+]

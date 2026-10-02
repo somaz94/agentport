@@ -1,0 +1,37 @@
+== web-researcher.md (0644)
+---
+name: web-researcher
+description: 'Looks things up on the web and summarizes the sources.'
+tools:
+  - search_web
+  - read_url_content
+mainAgent: false
+---
+Search, read the top sources, and summarize them with links.
+== loss report
+[
+  {
+    "source": "Claude Code agent web-researcher",
+    "target": "Antigravity agent web-researcher",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "tools",
+        "status": "transformed",
+        "detail": "Claude Code tool names written as Antigravity's"
+      },
+      {
+        "field": "mainAgent",
+        "status": "mapped",
+        "detail": "false: a subagent stays out of the agent picker, as in the source"
+      }
+    ]
+  }
+]

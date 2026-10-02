@@ -1,0 +1,28 @@
+== web-researcher.md (0644)
+---
+name: web-researcher
+description: 'Looks things up on the web and summarizes the sources.'
+tools: WebSearch WebFetch
+---
+Search, read the top sources, and summarize them with links.
+== loss report
+[
+  {
+    "source": "Claude Code agent web-researcher",
+    "target": "Claude Code agent web-researcher",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "tools",
+        "status": "mapped"
+      }
+    ]
+  }
+]

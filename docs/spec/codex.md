@@ -61,7 +61,7 @@ Identity is the `name` key, not the file name. A role file that is itself a **sy
 | `description` | **Required**, non-blank |
 | `developer_instructions` | **Required**, non-blank. The agent's system prompt |
 | `nickname_candidates` | Optional non-empty list; entries limited to ASCII letters, digits, space, `-`, `_` |
-| `model`, `model_reasoning_effort`, `model_reasoning_summary`, `model_verbosity`, `personality`, `service_tier` | Applied to the spawned agent |
+| `model`, `model_reasoning_effort`, `model_reasoning_summary`, `model_verbosity`, `personality`, `service_tier` | Applied to the spawned agent. Without `model` the role keeps the spawning session's model (source, `core/src/agent/role.rs`). `model_reasoning_effort` takes `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra`, `persistent`, or any other non-empty string as a model-defined level (source, `protocol/src/openai_models.rs`) |
 | `[features]` | Only `false` values for `shell_tool`, `apps`, `plugins`, `memories`, `request_permissions_tool` are applied; `true` is ignored |
 | `[skills]` | Only `config = [{name\|path, enabled = false}]`, `bundled.enabled = false`, `include_instructions = false` |
 
@@ -108,4 +108,4 @@ Tool names in hook payloads and matchers are Claude-compatible: `exec_command` i
 
 ## Built-in Claude importer
 
-`/import` in the TUI (not a `codex` subcommand) converts Claude commands into skills named `source-command-<slug>`, and **skips any command whose body contains** `$ARGUMENTS`, `$<digit>`, `{{ … }}`, `` !` ``, or a token starting with `@`. Claude agents become role files with `name`, `description`, `developer_instructions`; `tools` is not mapped, and `permissionMode` is written to `sandbox_mode`, which a role does not apply (source, `core-plugins/src/command_migration.rs`, `external-agent-migration/src/subagents.rs`).
+`/import` in the TUI (not a `codex` subcommand) converts Claude commands into skills named `source-command-<slug>`, and **skips any command whose body contains** `$ARGUMENTS`, `$<digit>`, `{{ … }}`, `` !` ``, or a token starting with `@`. Claude agents become role files with `name`, `description`, `developer_instructions`; `tools` is not mapped; `effort: max` becomes `xhigh` and a level outside `none` … `xhigh` is dropped; and `permissionMode` is written to `sandbox_mode`, which a role does not apply (source, `core-plugins/src/command_migration.rs`, `external-agent-migration/src/subagents.rs`).

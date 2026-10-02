@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -57,6 +58,10 @@ const (
 	CapPlan      Capability = "plan"
 )
 
+// Capabilities lists every capability, in the order writers emit tool names for an agent that
+// may use everything.
+var Capabilities = []Capability{CapRead, CapSearch, CapGlob, CapShell, CapEdit, CapWrite, CapWebFetch, CapWebSearch, CapDelegate, CapAskUser, CapPlan}
+
 // ToolSet is what an agent may call. The zero value grants nothing.
 type ToolSet struct {
 	// All means the source granted every tool, e.g. a Claude agent with no `tools` key.
@@ -65,6 +70,11 @@ type ToolSet struct {
 	Caps []Capability
 	// Unknown holds source tool names that map to no capability.
 	Unknown []string
+	// Narrowed holds source entries whose arguments restrict a tool, such as `Bash(git push *)`.
+	// No other harness can restrict a tool that way, so they grant it whole.
+	Narrowed []string
+	// Raw is the tool list as the source wrote it, so writing back to the same harness keeps it.
+	Raw *yaml.Node
 }
 
 // Add appends c unless it is already present.
@@ -72,6 +82,14 @@ func (t *ToolSet) Add(c Capability) {
 	if !t.Has(c) {
 		t.Caps = append(t.Caps, c)
 	}
+}
+
+// Granted returns the capabilities t grants, expanding All.
+func (t ToolSet) Granted() []Capability {
+	if t.All {
+		return slices.Clone(Capabilities)
+	}
+	return t.Caps
 }
 
 // Has reports whether c is granted, either explicitly or through All.
@@ -134,11 +152,17 @@ type Item struct {
 	// Tools is nil for kinds that carry no tool list.
 	Tools *ToolSet
 	// Model is the source value verbatim; empty means inherit.
-	Model      string
+	Model string
+	// Effort is the reasoning effort in the source's terms; empty means the default.
+	Effort string
+	// Preload names the skills an agent loads in full when it starts.
+	Preload    []string
 	Resources  []Resource
 	Extensions []Field
-	Notes      []Note
-	Source     Source
+	// Native is the frontmatter as the source wrote it, in order, for a writer to the same harness.
+	Native []Field
+	Notes  []Note
+	Source Source
 }
 
 // Extension returns the value of an unmodelled frontmatter key.

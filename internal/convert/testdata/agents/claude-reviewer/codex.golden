@@ -1,0 +1,48 @@
+== code-reviewer.toml (0644)
+name = "code-reviewer"
+description = "Reviews a diff for correctness: off-by-one errors, unchecked errors, races. Use after any change to Go files."
+developer_instructions = '''
+
+You review the current diff and report problems by severity.
+
+Rules:
+- Quote the exact line ("file.go:42") for every finding.
+- Treat `\d+` in a regex as a digit run, not a literal.
+'''
+== loss report
+[
+  {
+    "source": "Claude Code agent code-reviewer",
+    "target": "Codex agent code-reviewer",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "body",
+        "status": "mapped",
+        "detail": "became developer_instructions"
+      },
+      {
+        "field": "tools",
+        "status": "dropped",
+        "detail": "Codex has no per-role tool list"
+      },
+      {
+        "field": "tools",
+        "status": "warn",
+        "detail": "read-only cannot be enforced: every Codex role can edit files with apply_patch"
+      },
+      {
+        "field": "tools",
+        "status": "warn",
+        "detail": "the role keeps a shell the agent did not have, since Codex reads files through it"
+      }
+    ]
+  }
+]

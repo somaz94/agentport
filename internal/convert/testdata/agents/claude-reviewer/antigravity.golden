@@ -1,0 +1,44 @@
+== code-reviewer.md (0644)
+---
+name: code-reviewer
+description: 'Reviews a diff for correctness: off-by-one errors, unchecked errors, races. Use after any change to Go files.'
+tools:
+  - view_file
+  - grep_search
+  - find_by_name
+  - list_dir
+mainAgent: false
+---
+
+You review the current diff and report problems by severity.
+
+Rules:
+- Quote the exact line ("file.go:42") for every finding.
+- Treat `\d+` in a regex as a digit run, not a literal.
+== loss report
+[
+  {
+    "source": "Claude Code agent code-reviewer",
+    "target": "Antigravity agent code-reviewer",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "tools",
+        "status": "transformed",
+        "detail": "Claude Code tool names written as Antigravity's"
+      },
+      {
+        "field": "mainAgent",
+        "status": "mapped",
+        "detail": "false: a subagent stays out of the agent picker, as in the source"
+      }
+    ]
+  }
+]

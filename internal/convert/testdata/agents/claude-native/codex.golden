@@ -1,0 +1,43 @@
+== notes-keeper.toml (0644)
+name = "notes-keeper"
+description = "Keeps the running notes for a session."
+developer_instructions = '''
+Append each decision to the notes with its reason.
+'''
+== loss report
+[
+  {
+    "source": "Claude Code agent notes-keeper",
+    "target": "Codex agent notes-keeper",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "effort",
+        "status": "dropped",
+        "detail": "Codex has no 3 reasoning effort"
+      },
+      {
+        "field": "body",
+        "status": "mapped",
+        "detail": "became developer_instructions"
+      },
+      {
+        "field": "tools",
+        "status": "mapped",
+        "detail": "every tool; a Codex role cannot be restricted anyway"
+      },
+      {
+        "field": "skills",
+        "status": "dropped",
+        "detail": "a Codex role cannot preload skills"
+      }
+    ]
+  }
+]

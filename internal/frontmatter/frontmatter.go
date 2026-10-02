@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -198,21 +199,18 @@ func (d *Document) Delete(key string) {
 }
 
 // Marshal renders the document as strict YAML frontmatter followed by the body. `description`
-// is single-quoted because it routinely carries `: ` and backticks; the emitter falls back to
-// double quotes only for characters single quotes cannot hold. The document is not modified.
+// is single-quoted because it routinely carries `: ` and backticks, except where encodeFields keeps
+// yaml.v3's double quotes. The document is not modified.
 func (d *Document) Marshal() ([]byte, error) {
 	var out bytes.Buffer
 	if d.Fields != nil {
 		out.WriteString(delimiter + "\n")
 		if len(d.Fields.Content) > 0 {
-			enc := yaml.NewEncoder(&out)
-			enc.SetIndent(2)
-			if err := enc.Encode(withQuotedDescription(d.Fields)); err != nil {
-				return nil, fmt.Errorf("encode frontmatter: %w", err)
+			text, err := encodeFields(d.Fields, true)
+			if err != nil {
+				return nil, err
 			}
-			if err := enc.Close(); err != nil {
-				return nil, fmt.Errorf("encode frontmatter: %w", err)
-			}
+			out.Write(text)
 		}
 		out.WriteString(delimiter + "\n")
 	}
@@ -220,16 +218,79 @@ func (d *Document) Marshal() ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-func withQuotedDescription(m *yaml.Node) *yaml.Node {
+// encodeFields encodes m with its description single-quoted. yaml.v3 double-quotes any scalar with a
+// character beyond U+FFFF, so with swap set a description single quotes can hold is written as a
+// placeholder and put back by hand, unless that line carries more (a line comment, an anchor, a
+// quoted key, a flow mapping): then yaml.v3's double quotes stand.
+func encodeFields(m *yaml.Node, swap bool) ([]byte, error) {
+	fields, desc := withQuotedDescription(m, swap)
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(fields); err != nil {
+		return nil, fmt.Errorf("encode frontmatter: %w", err)
+	}
+	if err := enc.Close(); err != nil {
+		return nil, fmt.Errorf("encode frontmatter: %w", err)
+	}
+	if desc == "" {
+		return buf.Bytes(), nil
+	}
+	placeholder := "\ndescription: '" + descriptionToken + "'\n"
+	text := "\n" + buf.String()
+	if strings.Count(text, placeholder) != 1 {
+		return encodeFields(m, false)
+	}
+	text = strings.Replace(text, placeholder, "\ndescription: '"+strings.ReplaceAll(desc, "'", "''")+"'\n", 1)
+	return []byte(text[1:]), nil
+}
+
+// descriptionToken holds the description's place while yaml.v3 encodes the rest; see encodeFields.
+const descriptionToken = "agentport-description-placeholder"
+
+// withQuotedDescription single-quotes m's description; with swap set, see encodeFields.
+func withQuotedDescription(m *yaml.Node, swap bool) (*yaml.Node, string) {
 	for i := 0; i+1 < len(m.Content); i += 2 {
 		if m.Content[i].Value == "description" && m.Content[i+1].Kind == yaml.ScalarNode {
 			desc := *m.Content[i+1]
 			desc.Style = yaml.SingleQuotedStyle
+			var swapped string
+			if swap && beyondBMP(desc.Value) && singleQuotable(desc.Value) {
+				swapped, desc.Value = desc.Value, descriptionToken
+			}
 			cp := *m
 			cp.Content = slices.Clone(m.Content)
 			cp.Content[i+1] = &desc
-			return &cp
+			return &cp, swapped
 		}
 	}
-	return m
+	return m, ""
+}
+
+func beyondBMP(s string) bool {
+	for _, r := range s {
+		if r > 0xFFFF {
+			return true
+		}
+	}
+	return false
+}
+
+// singleQuotable reports whether every character of s is printable in YAML 1.2 and none is a line
+// break yaml.v3 recognizes, which a single-quoted scalar would fold into a space.
+func singleQuotable(s string) bool {
+	if !utf8.ValidString(s) {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r == 0x2028, r == 0x2029:
+			return false
+		case r == '\t', r >= 0x20 && r <= 0x7E, r >= 0xA0 && r <= 0xD7FF,
+			r >= 0xE000 && r <= 0xFFFD && r != 0xFEFF, r >= 0x10000 && r <= 0x10FFFF:
+		default:
+			return false
+		}
+	}
+	return true
 }

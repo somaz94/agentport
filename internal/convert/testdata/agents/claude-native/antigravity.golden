@@ -1,0 +1,59 @@
+== notes-keeper.md (0644)
+---
+name: notes-keeper
+description: 'Keeps the running notes for a session.'
+tools:
+  - view_file
+  - grep_search
+  - find_by_name
+  - list_dir
+  - run_command
+  - manage_task
+  - replace_file_content
+  - write_to_file
+  - read_url_content
+  - search_web
+  - invoke_subagent
+  - ask_question
+preloadSkills:
+  - alpha
+  - beta
+mainAgent: false
+---
+Append each decision to the notes with its reason.
+== loss report
+[
+  {
+    "source": "Claude Code agent notes-keeper",
+    "target": "Antigravity agent notes-keeper",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "tools",
+        "status": "transformed",
+        "detail": "every tool, listed by name: without a list Antigravity grants no shell, search or edit tool"
+      },
+      {
+        "field": "effort",
+        "status": "dropped",
+        "detail": "Antigravity has no reasoning effort setting"
+      },
+      {
+        "field": "preloadSkills",
+        "status": "mapped"
+      },
+      {
+        "field": "mainAgent",
+        "status": "mapped",
+        "detail": "false: a subagent stays out of the agent picker, as in the source"
+      }
+    ]
+  }
+]

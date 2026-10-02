@@ -35,7 +35,7 @@ Existing tools were considered first. rulesync supports all three harnesses but 
 
 `reader(harness A) → IR → writer(harness B) + loss report`
 
-- The IR (`internal/ir`) carries kind, name, description, body, invocation policy, a tool set expressed as capabilities (read, search, glob, shell, edit, write, web fetch, web search, delegate, ask user, plan), the model, bundled resources byte for byte with their file modes, and `Extensions` for source-only fields so a round trip back to the source loses nothing.
+- The IR (`ir.Item` in `internal/ir`) is the harness-neutral item. Three choices shape it: tools are a set of capabilities (`ir.Capabilities`: read, search, glob, shell, edit, write, web fetch, web search, delegate, ask user, plan) rather than tool names; bundled resources are kept byte for byte with their file modes; and fields only the source harness has are kept, so a round trip back to the source loses nothing.
 - Every loss entry names a field and one status: `mapped`, `transformed`, `approximated`, `dropped` or `warn`. A field can collect several entries — a body can be both transformed (the arguments preamble) and approximated (shell injection the target does not run). Reports are available as text and JSON.
 - Locations come only from the version-pinned table in `internal/paths`. Antigravity's directories have moved several times; a move is a one-row change there plus a `doctor` warning for the old location.
 - Frontmatter is read leniently, with the same repair pass Claude Code and Codex apply, and written as strict YAML with `description` single-quoted.
@@ -66,7 +66,7 @@ Existing tools were considered first. rulesync supports all three harnesses but 
   - When the skills directory cannot be read, no command can be checked, so none is converted.
   - `scan` lists a skipped command with its reason, and `convert` refuses it.
 - Claude Code ignores `name` and `paths` in a command, so neither is carried over; each produces a `warn`. In a skill, `name` would rename it and `paths` would limit when it loads — effects the command never had.
-- Commands are listed the way Claude Code lists them ([spec/claude-code.md](spec/claude-code.md#commands-and-skills-are-one-system)): symbolic links are followed and keep their own names, each directory is entered once, under the first path in name order, and an unreadable directory or a broken link is skipped. `convert` takes the nearest enclosing commands directory from the location table (`internal/paths`), which also gives the skills directory checked for collisions, and refuses a command that this listing never reaches. A command outside every commands directory needs `--from`; it is named after its file and has nothing to collide with.
+- Commands are listed the way Claude Code lists them ([spec/claude-code.md](spec/claude-code.md#how-commands-and-agents-are-listed)): symbolic links are followed and keep their own names, each directory is entered once, under the first path in name order, and an unreadable directory or a broken link is skipped. `convert` takes the nearest enclosing commands directory from the location table (`internal/paths`), which also gives the skills directory checked for collisions, and refuses a command that this listing never reaches. A command outside every commands directory needs `--from`; it is named after its file and has nothing to collide with.
 - Neither target substitutes `$ARGUMENTS`. The body is left untouched and a marked preamble is prepended, so `adopt` can remove it exactly:
 
   ```markdown
@@ -81,31 +81,66 @@ Existing tools were considered first. rulesync supports all three harnesses but 
 
 <br/>
 
+### Reading agents
+
+- Claude Code skips an agent its [frontmatter rules](spec/claude-code.md#agent-frontmatter) reject, so agentport refuses such a file rather than converting something the hub never loads.
+- A Claude Code `tools` value is read as Claude Code reads it ([spec/claude-code.md](spec/claude-code.md#agent-frontmatter)): omitted or `*` grants every tool, and old names are normalized ([spec/claude-code.md](spec/claude-code.md#tool-names)).
+- A specifier such as `Bash(git push *)` still grants the tool. No other harness can narrow a tool, so an Antigravity agent gets it whole, reported `approximated`. `disallowedTools` removes the tools it names from the set; written back to Claude Code, the agent keeps it as written.
+- An Antigravity agent that Antigravity would drop is refused: frontmatter that is not strict YAML, or a value the [agent frontmatter table](spec/antigravity.md#agent-frontmatter) marks as dropping the agent. Without `tools` it reads as Antigravity's default set.
+- A Codex role without `name`, `description` or `developer_instructions` is refused, since Codex drops it. Every role can read, list and search files and run commands through the shell, edit files, search the web and delegate, so it reads as those capabilities; `[features] shell_tool = false` leaves only editing, web search and delegation ([spec/codex.md](spec/codex.md#tool-names)).
+- An agent is found where its harness finds it: in the agents directory from the location table, which [Claude Code](spec/claude-code.md#how-commands-and-agents-are-listed) walks with its command loader, [Codex](spec/codex.md#locations) recursively and [Antigravity](spec/antigravity.md#locations) one level deep.
+- `convert` decides the kind from the path: a `.toml` file is a Codex role, and a Markdown file is a command under a commands directory and an agent under an agents directory. `--kind agent` with `--from` reads an agent from anywhere else.
+- Agents that share a name are all skipped: the harness loads one of them, and agentport cannot tell which. `scan` lists them with the reason, and `convert` refuses them. One file reached by two paths is one agent, since an agent is named by its `name`, not its path.
+- A symlinked Codex role file is read but reported with a `warn`, since Codex fails such a role when it starts.
+- The name becomes the output file's name, so one that is not a safe file name (`..`, a slash) is an error.
+- Converting an agent to its own harness keeps every field as written; the rules below are for crossing harnesses.
+
+<br/>
+
 ### Agent → Antigravity agent
 
 Antigravity reports none of these failures, so the writer checks all of them before writing:
 
 - `name` and `description` are required, and the identity is `name`, not the file name.
-- `tools` is a YAML list of names from the runtime-verified table in [spec/antigravity.md](spec/antigravity.md). An unknown name makes the subagent fail when it starts.
+- `tools` is a YAML list of names from the runtime-verified table in [spec/antigravity.md](spec/antigravity.md#tool-names). An unknown name makes the subagent fail when it starts.
+- Tool names keep the source's order, each capability becoming the Antigravity tools that cover it. A tool with no counterpart is `dropped`.
 - A Claude agent with no `tools` may use every tool, while an Antigravity agent with no `tools` gets no shell, search or edit tool. Omitted or `*` therefore converts to the full list.
-- `model` is one of `inherit`, `flash_lite`, `flash`, `pro`. Anything else drops the agent, so unmapped models become `inherit` with a loss entry.
-- `mainAgent: false` keeps a converted subagent out of the app's agent picker; it is still invocable as a subagent.
+- `model` must be a tier Antigravity knows ([spec/antigravity.md](spec/antigravity.md#agent-frontmatter)); anything else drops the agent, so an unmapped model is not written: the agent gets the default, `inherit`, and the report marks it `approximated`.
+- Claude Code `skills` becomes `preloadSkills`. Reasoning effort is `dropped`: Antigravity has no such setting.
+- Fields only the source harness has are `dropped`, except those that shaped the tool set, which are `transformed`: Claude Code `disallowedTools` and Codex `[features] shell_tool`; the other `[features]` switches are `dropped`.
+- `mainAgent: false` is added to an agent from another harness, keeping a converted subagent out of the app's agent picker; it is still invocable as a subagent. An Antigravity source keeps its own value.
 
 <br/>
 
 ### Agent → Codex role
 
 - Only keys Codex applies to a role are written: `name`, `description`, `developer_instructions` (all required), optionally `model`, `model_reasoning_effort`, `[features]`. One unknown key drops the whole role, and keys such as `sandbox_mode` parse but are not applied, so neither is ever emitted.
-- Codex has no per-role tool allowlist, so `tools` is `dropped`. Codex has no file-read or search tool either: files are read through the shell. Turning the shell off (`[features] shell_tool = false`) would leave a read-only reviewer unable to read anything, so it is used only for an agent that has no read, search, glob, edit, write or shell capability at all. Otherwise the inability to enforce read-only is a `warn`.
+- Codex has no per-role tool allowlist, so `tools` is `dropped` unless the agent may use every tool. Codex has no file-read or search tool either: files are read through the shell. Turning the shell off (`[features] shell_tool = false`) would leave a read-only reviewer unable to read anything, so it is used only for an agent that has no read, search, glob, edit, write or shell capability at all. Otherwise the inability to enforce read-only is a `warn` for an agent with neither an edit nor a write tool, and so is the shell the role keeps for an agent that had none.
 - A symlinked role file fails at spawn, so roles are always copied.
-- `effort` maps to `model_reasoning_effort`, with `max` becoming `xhigh`.
+- A model from another harness is left out, so the role keeps the session's model ([spec/codex.md](spec/codex.md#agent-role-files)), reported `approximated`.
+- `effort` carries over as `model_reasoning_effort`, with `max` becoming `xhigh` as Codex's own importer maps it ([spec/codex.md](spec/codex.md#built-in-claude-importer)); an effort given as a number is `dropped`.
+- Preloaded skills are `dropped`; a role cannot preload them. Antigravity `mainAgent: false` is `mapped`, since a role only ever runs as a subagent.
+- `developer_instructions` is written as a multi-line literal string when the text allows it, so backslashes and quotes stay as written. The written role is parsed back and its strings compared with the source before it is returned.
+
+<br/>
+
+### Agent → Claude Code agent
+
+- A name Claude Code would skip ([spec/claude-code.md](spec/claude-code.md#agent-frontmatter)) is refused.
+- Tools are rebuilt from the capabilities with Claude Code's names, in the source's order. An agent that may use every tool gets no `tools` key, which is how Claude Code grants them all. A name without a counterpart, such as Antigravity's `schedule`, is `dropped`.
+- Antigravity `preloadSkills` becomes `skills`, and `mainAgent: false` is `mapped`, since every Claude Code agent is a subagent; `true` has no counterpart and is `dropped`.
+- A source `model: inherit` is written out, because without a `model` Claude Code tries its subagent default first ([spec/claude-code.md](spec/claude-code.md#agent-frontmatter)).
+- A model from another harness has no Claude Code counterpart, so it is left out and the agent gets Claude Code's default subagent model ([spec/claude-code.md](spec/claude-code.md#agent-frontmatter)), reported `approximated`.
+- Codex `model_reasoning_effort` carries over as `effort` for the levels Claude Code also has ([spec/claude-code.md](spec/claude-code.md#agent-frontmatter)); any other is `dropped`.
+- Fields only the source harness has are `dropped`, except Codex `[features] shell_tool`, which shaped the tool set and is reported `transformed`; the other `[features]` switches are `dropped`.
 
 <br/>
 
 ### References inside bodies
 
-- Agent names a body delegates to (for example "delegate to `git-commit-runner`") are checked against the set converted for that target; a missing one is a `warn`.
-- Claude-only tool names in prose (`AskUserQuestion`, `TodoWrite`) produce a `warn` naming the target's counterpart.
+- Claude Code tool names distinct enough to find in prose (for example `AskUserQuestion`, `TodoWrite`, `WebFetch`) produce a `warn` when a body leaves Claude Code, naming the target's counterpart or saying it has none. Names that are also plain words, such as `Read` or `Edit`, are not checked.
+- `convert` checks the agent names a body mentions against the agents the target already has at the user scope, taking the source harness's user-scope agents as the names to look for. A mentioned agent the target lacks is a `warn` that suggests converting it too.
+- `scan` checks tool names but not agent references: it grades portability, not what each harness has installed.
 - Paths under `~/.claude/` are not rewritten by default; on the same machine they still resolve. A `rewrite` rule in the config enables substitution.
 
 <br/>

@@ -50,15 +50,15 @@ A file that fails any **required** check is dropped **silently**: no load error 
 
 | Key | Type | Behaviour | Evidence |
 |---|---|---|---|
-| `name` | string, **required** | Identity. The file name is ignored (`a.md` with `name: b` loads as `b`). Missing → dropped | probe |
-| `description` | string, **required** | Missing → dropped | probe |
-| `tools` | YAML **list** | Names are **not validated at load** — `[Read, Grep]` loads — but **an unknown name fails the subagent at spawn** (`tool "command_status" not found in registry`). A comma-separated string (`tools: a, b`) drops the whole agent at load. `[]` grants no tools. `send_message` is always added | probe, runtime |
+| `name` | string, **required** | Identity. The file name is ignored (`a.md` with `name: b` loads as `b`). Missing, a list or a mapping → dropped. A number loads as its text | probe |
+| `description` | string, **required** | Missing, a list or a mapping → dropped | probe |
+| `tools` | YAML **list** | Names are **not validated at load** — `[Read, Grep]` loads — but **an unknown name fails the subagent at spawn** (`tool "command_status" not found in registry`). A comma-separated string (`tools: a, b`) or a nested list drops the whole agent at load; a non-string item such as `1` loads. `[]` grants no tools. `send_message` is always added | probe, runtime |
 | `tools` omitted | — | Default set: `send_message`, `view_file`, `read_url_content`, `search_web`, `schedule`, `generate_image`, plus `manage_task` at runtime. No shell, search, or edit tool | probe, runtime |
-| `model` | enum | `inherit` (default), `flash_lite`, `flash`, `pro`. Any other value (`opus`, a full model ID) drops the whole agent | probe |
-| `preloadSkills` | list of skill names | Becomes the skill preload list. An unknown name does not fail the load | probe |
+| `model` | enum | `inherit` (default), `flash_lite`, `flash`, `pro`, in any case (`Flash` loads as `flash`). Any other value (`opus`, a full model ID) drops the whole agent | probe |
+| `preloadSkills` | list of skill names | Becomes the skill preload list. An unknown name does not fail the load; a single name not in a list drops the agent | probe |
 | `inheritMcp` | bool | `false` stops the agent inheriting the user's MCP servers | probe |
 | `inheritCustomizations` | bool | `false` stops inheriting the user's skills, agents, plugins, rules and hooks | probe |
-| `mainAgent` | bool | `false` keeps the agent loaded but removes it from the agent picker list; it is still invocable as a subagent | probe, runtime |
+| `mainAgent` | bool | `false` keeps the agent loaded but removes it from the agent picker list; it is still invocable as a subagent. Decoded as yaml.v3 decodes a boolean: `true` or `false` as `true`, `True` or `TRUE`; the YAML 1.1 words `yes`, `no`, `on`, `off`, `y`, `n` in the same three spellings, even quoted; or nothing, which keeps the default. A number, a quoted `'true'` or `'false'`, or any other spelling (`tRuE`) drops the agent | probe, runtime |
 | `hidden`, `background` | bool | Accepted; no effect visible in the parsed config | probe |
 | `mcpServers`, `hooks` | — | Tags exist in the binary; not probed | binary |
 | Any other key | — | Ignored | probe |

@@ -29,7 +29,7 @@ test-unit: ## Run unit tests with coverage
 
 AG_LANGUAGE_SERVER ?= /Applications/Antigravity.app/Contents/Resources/bin/language_server
 
-e2e-antigravity: ## Load converted skill fixtures with the Antigravity desktop app's own loader
+e2e-antigravity: ## Load converted skill, command and agent fixtures with the Antigravity desktop app's own loader
 	AGENTPORT_AG_LANGUAGE_SERVER=$(AG_LANGUAGE_SERVER) go test ./internal/convert/ -run TestAntigravity -v
 
 ## Coverage

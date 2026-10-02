@@ -18,7 +18,7 @@ Claude Code is agentport's hub, so this file describes what the **reader** must 
 |---|---|---|
 | Skill | `~/.claude/skills/<dir>/SKILL.md` | `.claude/skills/<dir>/SKILL.md` (nested `.claude/skills` also load, namespaced) |
 | Command | `~/.claude/commands/**/*.md` | `.claude/commands/**/*.md` |
-| Agent | `~/.claude/agents/*.md` | `.claude/agents/*.md` |
+| Agent | `~/.claude/agents/**/*.md` | `.claude/agents/**/*.md` |
 | Instructions | `~/.claude/CLAUDE.md` | `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, `.claude/rules/*.md` |
 | Hooks | `~/.claude/settings.json` `hooks` | `.claude/settings.json` `hooks` |
 
@@ -30,7 +30,11 @@ Claude Code is agentport's hub, so this file describes what the **reader** must 
 
 Commands were merged into skills: `.claude/commands/deploy.md` and `.claude/skills/deploy/SKILL.md` both create `/deploy` (docs). A command accepts every skill key except `name` and `paths`; its name is the file name, and a subdirectory becomes a `:` namespace (`frontend/component.md` → `/frontend:component`). On a name collision the skill wins over the command (docs).
 
-Commands are listed by a loader that follows symbolic links: a linked directory, the commands directory itself included, is entered, and a linked file whose link name ends in `.md` is loaded, each under its path through the link, so a linked command is named after the link. Each directory is entered once, by device and inode, under the first path the walk reaches, which ends a link loop; an unreadable directory or a broken link is skipped. A file reached twice, through a link or a hard link, loads once, under the first path reached (binary).
+<br/>
+
+## How commands and agents are listed
+
+Commands and agents are listed by one loader that follows symbolic links: a linked directory, the commands or agents directory itself included, is entered, and a linked file whose link name ends in `.md` is loaded, each under its path through the link, so a linked command is named after the link (an agent is named by its `name` key). Each directory is entered once, by device and inode, under the first path the walk reaches, which ends a link loop; an unreadable directory or a broken link is skipped. A file reached twice, through a link or a hard link, loads once, under the first path reached (binary).
 
 <br/>
 
@@ -82,17 +86,18 @@ Argument values are inserted literally and are not re-expanded (binary).
 
 ## Agent frontmatter
 
-`name` and `description` are required; a file missing either is skipped (binary). `name` may not contain `:` or start with `-`.
+`name` and `description` are required, and both must be strings: a file missing either, or holding a number or a list in either, is skipped (binary). `name` may not start with `-` or contain `:`, tested on its NFKC form, so a compatibility colon such as `：` counts. The two characters `\n` in a description become a line break (binary).
 
 | Key | Values | Evidence |
 |---|---|---|
-| `tools` | Comma-separated string or YAML list; space-separated also works. Omitted → every tool available to subagents. `*` → all. Specifiers: `Bash(git push *)`, `Agent(worker, researcher)`, `mcp__<server>`, `mcp__<server>__*` | docs, binary |
-| `disallowedTools` | Removed from the inherited or listed set; a specifier still removes the whole tool | docs |
+| `tools` | Comma-separated string or YAML list; space-separated also works. Omitted → every tool available to subagents. `*` → all. Specifiers: `Bash(git push *)`, `Agent(worker, researcher)`, `mcp__<server>`, `mcp__<server>__*`. A string, and each string list item, splits only at `,` and U+0020 outside parentheses (a tab or newline stays inside an entry); list items that are not strings are ignored, and a value that is neither a string nor a list, or is empty, grants no tool | docs, binary |
+| `disallowedTools` | Removed from the inherited or listed set; a specifier still removes the whole tool (docs). A list holding `*` is ignored as a whole (binary) | docs, binary |
 | `model` | `inherit`, `sonnet`, `opus`, `haiku`, `fable`, or a full model ID. Omitted → `CLAUDE_CODE_SUBAGENT_MODEL`, then the main model | docs, binary |
 | `permissionMode` | `default`, `acceptEdits`, `auto`, `dontAsk`, `bypassPermissions`, `plan` | docs |
 | `skills` | Skills preloaded with full content | docs |
 | `mcpServers`, `hooks` | Name or inline config; scoped hooks | docs |
-| `maxTurns`, `effort`, `background`, `isolation`, `memory`, `color`, `initialPrompt`, `omitClaudeMd` | Runtime behaviour with no counterpart in other harnesses | docs |
+| `effort` | `low`, `medium`, `high`, `xhigh`, `max` (`med` is an alias), or an integer; any other value is logged and ignored | binary |
+| `maxTurns`, `background`, `isolation`, `memory`, `color`, `initialPrompt`, `omitClaudeMd` | Runtime behaviour with no counterpart in other harnesses | docs |
 
 <br/>
 

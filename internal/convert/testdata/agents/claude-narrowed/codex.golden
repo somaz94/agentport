@@ -1,0 +1,43 @@
+== git-helper.toml (0644)
+name = "git-helper"
+description = "Answers questions about the repository history."
+developer_instructions = '''
+Answer from `git log` and `git show` output only.
+'''
+== loss report
+[
+  {
+    "source": "Claude Code agent git-helper",
+    "target": "Codex agent git-helper",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "disallowedTools",
+        "status": "dropped",
+        "detail": "Codex has no per-role tool list"
+      },
+      {
+        "field": "body",
+        "status": "mapped",
+        "detail": "became developer_instructions"
+      },
+      {
+        "field": "tools",
+        "status": "dropped",
+        "detail": "Codex has no per-role tool list"
+      },
+      {
+        "field": "tools",
+        "status": "warn",
+        "detail": "read-only cannot be enforced: every Codex role can edit files with apply_patch"
+      }
+    ]
+  }
+]

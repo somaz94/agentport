@@ -1,0 +1,14 @@
+name = "patch-writer"
+description = "Writes a patch from a precise description; never runs commands."
+model = "gpt-5-codex"
+model_reasoning_effort = "high"
+nickname_candidates = ["Ada", "Lin"]
+developer_instructions = '''
+Write the smallest patch that matches the description.
+Keep "quoted" text and \escapes exactly as given.
+'''
+
+[features]
+shell_tool = false
+
+apps = false

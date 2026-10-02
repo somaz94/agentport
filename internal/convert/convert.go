@@ -26,6 +26,9 @@ var ErrAmbiguous = errors.New("cannot tell the source harness from the path")
 // Options are the conversion choices a user can change.
 type Options = common.Options
 
+// AgentNames are the agents on either side of a conversion.
+type AgentNames = common.AgentNames
+
 type skillCodec struct {
 	read  func(string) (*ir.Item, error)
 	write func(*ir.Item, common.Options) ([]ir.Resource, loss.Report, error)
@@ -67,6 +70,7 @@ func Skill(item *ir.Item, to harness.ID, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	checkBody(item, to, opts, &report)
 	report.Source = fmt.Sprintf("%s %s %s", item.Source.Harness.Title(), item.Kind, item.Name)
 	report.Target = fmt.Sprintf("%s skill %s", to.Title(), item.Name)
 	return Result{Item: item, Files: files, Report: report}, nil

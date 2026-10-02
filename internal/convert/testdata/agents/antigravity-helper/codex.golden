@@ -1,0 +1,58 @@
+== docs-helper.toml (0644)
+name = "docs-helper"
+description = "Finds and explains documentation: API pages, READMEs, changelogs."
+developer_instructions = '''
+Find the relevant documentation and explain it in plain words.
+'''
+== loss report
+[
+  {
+    "source": "Antigravity agent docs-helper",
+    "target": "Codex agent docs-helper",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "model",
+        "status": "approximated",
+        "detail": "Codex has no flash model; the role uses the session's model"
+      },
+      {
+        "field": "mainAgent",
+        "status": "dropped",
+        "detail": "Antigravity-only field"
+      },
+      {
+        "field": "inheritMcp",
+        "status": "dropped",
+        "detail": "Antigravity-only field"
+      },
+      {
+        "field": "body",
+        "status": "mapped",
+        "detail": "became developer_instructions"
+      },
+      {
+        "field": "tools",
+        "status": "dropped",
+        "detail": "Codex has no per-role tool list"
+      },
+      {
+        "field": "tools",
+        "status": "warn",
+        "detail": "read-only cannot be enforced: every Codex role can edit files with apply_patch"
+      },
+      {
+        "field": "skills",
+        "status": "dropped",
+        "detail": "a Codex role cannot preload skills"
+      }
+    ]
+  }
+]

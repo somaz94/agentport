@@ -1,0 +1,59 @@
+== release-runner.toml (0644)
+name = "release-runner"
+description = "Runs the release checklist and fixes what fails."
+model_reasoning_effort = "xhigh"
+developer_instructions = '''
+Run the release checklist in order. Stop at the first failure, fix it, and run the step again.
+'''
+== loss report
+[
+  {
+    "source": "Claude Code agent release-runner",
+    "target": "Codex agent release-runner",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "model",
+        "status": "approximated",
+        "detail": "Codex has no sonnet model; the role uses the session's model"
+      },
+      {
+        "field": "effort",
+        "status": "transformed",
+        "detail": "max became model_reasoning_effort = xhigh, as Codex's own importer maps it"
+      },
+      {
+        "field": "color",
+        "status": "dropped",
+        "detail": "Claude Code-only field"
+      },
+      {
+        "field": "permissionMode",
+        "status": "dropped",
+        "detail": "Claude Code-only field"
+      },
+      {
+        "field": "body",
+        "status": "mapped",
+        "detail": "became developer_instructions"
+      },
+      {
+        "field": "tools",
+        "status": "dropped",
+        "detail": "Codex has no per-role tool list"
+      },
+      {
+        "field": "skills",
+        "status": "dropped",
+        "detail": "a Codex role cannot preload skills"
+      }
+    ]
+  }
+]

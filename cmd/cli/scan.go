@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -45,7 +46,7 @@ type Entry struct {
 	Name      string                `json:"name"`
 	Path      string                `json:"path"`
 	Targets   map[harness.ID]Target `json:"targets,omitempty"`
-	// Skipped says why a command would not be converted at all.
+	// Skipped says why a command or agent would not be converted at all.
 	Skipped string `json:"skipped,omitempty"`
 }
 
@@ -55,8 +56,8 @@ func newScanCmd(opts *options) *cobra.Command {
 		Use:   "scan",
 		Short: "List the customizations at each harness location and how portable each is",
 		Long: "List skills, commands and agents at every harness location for a scope. Convert each\n" +
-			"skill and command in memory to the other harnesses and summarize what would be lost; a\n" +
-			"command whose skill name is taken is listed as skipped.",
+			"in memory to the other harnesses and summarize what would be lost; a command whose skill\n" +
+			"name is taken is listed as skipped.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			entries, warnings, err := scan(s)
@@ -102,6 +103,7 @@ func scan(s *scanOptions) ([]Entry, []string, error) {
 
 	byPath := map[string]*Entry{}
 	commandDirs := map[harness.ID]convert.CommandDirs{}
+	agentDirs := map[harness.ID]string{}
 	var order, warnings []string
 	for _, h := range tools {
 		layout, err := paths.For(h)
@@ -112,6 +114,9 @@ func scan(s *scanOptions) ([]Entry, []string, error) {
 			rel, err := layout.Dir(scope, kind)
 			if err != nil {
 				continue
+			}
+			if kind == ir.KindAgent {
+				agentDirs[h] = filepath.Join(root, rel)
 			}
 			if kind == ir.KindCommand {
 				if skills, err := layout.Dir(scope, ir.KindSkill); err == nil {
@@ -145,6 +150,12 @@ func scan(s *scanOptions) ([]Entry, []string, error) {
 		shadowed[h] = m
 	}
 
+	duplicates := map[harness.ID]map[string]string{}
+	for h, dir := range agentDirs {
+		// An unreadable directory was already reported while listing.
+		duplicates[h], _ = convert.AgentDuplicates(h, dir)
+	}
+
 	entries := make([]Entry, 0, len(order))
 	for _, p := range order {
 		e := byPath[p]
@@ -161,6 +172,15 @@ func scan(s *scanOptions) ([]Entry, []string, error) {
 				break
 			}
 			item, err := convert.ReadCommand(h, p, rel)
+			e.Targets = convertTargets(item, err, e.Harnesses)
+		case ir.KindAgent:
+			h := e.Harnesses[0]
+			rel, _ := filepath.Rel(agentDirs[h], p)
+			if why := duplicates[h][filepath.ToSlash(rel)]; why != "" {
+				e.Skipped = why
+				break
+			}
+			item, err := convert.ReadAgent(h, p)
 			e.Targets = convertTargets(item, err, e.Harnesses)
 		}
 		entries = append(entries, *e)
@@ -206,31 +226,15 @@ func listItems(h harness.ID, kind ir.Kind, dir string) ([]found, []string) {
 		for _, rel := range rels {
 			out = append(out, found{strings.TrimSuffix(rel, ".md"), filepath.Join(dir, filepath.FromSlash(rel))})
 		}
-	default:
-		ext := ".md"
-		if h == harness.Codex && kind == ir.KindAgent {
-			ext = ".toml"
-		}
-		// WalkDir does not enter a symlinked root; Claude Code and Codex read through one.
-		walkRoot, err := filepath.EvalSymlinks(dir)
+	case ir.KindAgent:
+		rels, warn, err := convert.AgentFiles(h, dir)
 		if err != nil {
 			return nil, []string{err.Error()}
 		}
-		_ = filepath.WalkDir(walkRoot, func(p string, d fs.DirEntry, err error) error {
-			if err != nil {
-				warnings = append(warnings, err.Error())
-				if d != nil && d.IsDir() {
-					return fs.SkipDir
-				}
-				return nil
-			}
-			if d.IsDir() || filepath.Ext(p) != ext {
-				return nil
-			}
-			rel, _ := filepath.Rel(walkRoot, p)
-			out = append(out, found{strings.TrimSuffix(filepath.ToSlash(rel), ext), filepath.Join(dir, rel)})
-			return nil
-		})
+		warnings = warn
+		for _, rel := range rels {
+			out = append(out, found{strings.TrimSuffix(rel, path.Ext(rel)), filepath.Join(dir, filepath.FromSlash(rel))})
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })
 	return out, warnings
@@ -248,7 +252,7 @@ func convertTargets(item *ir.Item, err error, owners []harness.ID) map[harness.I
 			targets[to] = Target{Error: err.Error()}
 			continue
 		}
-		res, cerr := convert.Skill(item, to, convert.Options{})
+		res, cerr := convert.Item(item, to, convert.Options{})
 		if cerr != nil {
 			targets[to] = Target{Error: cerr.Error()}
 			continue

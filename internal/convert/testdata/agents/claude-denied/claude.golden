@@ -1,0 +1,28 @@
+== read-only-reviewer.md (0644)
+---
+name: read-only-reviewer
+description: 'Reviews anything it is given and never changes files.'
+disallowedTools: Write, Edit, NotebookEdit
+---
+Read what you are given and report findings; do not edit anything.
+== loss report
+[
+  {
+    "source": "Claude Code agent read-only-reviewer",
+    "target": "Claude Code agent read-only-reviewer",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "disallowedTools",
+        "status": "mapped"
+      }
+    ]
+  }
+]

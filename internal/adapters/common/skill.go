@@ -41,6 +41,16 @@ type Options struct {
 	// ModelInvocableCommands lets the model start converted commands, as Claude Code does. Off by
 	// default, so a mutating workflow never starts from a description match alone.
 	ModelInvocableCommands bool
+	// Agents, when set, checks the agents a body refers to against those the target has.
+	Agents *AgentNames
+}
+
+// AgentNames are the agents on either side of a conversion.
+type AgentNames struct {
+	// Known are the source harness's agent names: the names a body can refer to.
+	Known []string
+	// Present are the agent names the target harness already has.
+	Present map[string]bool
 }
 
 // UserOnlyDetail explains, in a loss report, why a converted command lost model invocation. It

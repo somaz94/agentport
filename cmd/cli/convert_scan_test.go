@@ -177,6 +177,8 @@ func TestScanUser(t *testing.T) {
 		"codex        skill    codex-skill",
 		"broken",
 		"skipped (a skill named demo-skill exists and keeps the name)",
+		"claude       agent    reviewer            codex: lossless; antigravity: lossless",
+		"antigravity  agent    helper              claude: 1 dropped; codex: 1 dropped, 2 warn",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("scan output lacks %q:\n%s", want, out)
@@ -492,5 +494,107 @@ func TestScanUncheckedCommands(t *testing.T) {
 	}
 	if _, err := run(t, "convert", filepath.Join(root, ".claude", "commands", "a-b.md"), "--to", "codex"); err == nil || !strings.Contains(err.Error(), "check name collisions") {
 		t.Errorf("convert without a name check: %v", err)
+	}
+}
+
+func TestConvertAgent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	agents := filepath.Join(home, ".claude", "agents")
+	reviewer := filepath.Join(agents, "reviewer.md")
+	writeFile(t, reviewer, "---\nname: reviewer\ndescription: Reviews diffs.\ntools: Read, Grep\n---\nHand fixes to `fixer`.\n")
+	writeFile(t, filepath.Join(agents, "team", "fixer.md"), "---\nname: fixer\ndescription: Fixes.\n---\nFix it.\n")
+
+	out, err := run(t, "convert", reviewer, "--to", "antigravity", "--print")
+	for _, want := range []string{"Claude Code agent reviewer -> Antigravity agent reviewer", "  - view_file", "mainAgent: false",
+		"refers to fixer, which Antigravity does not have; convert it too"} {
+		if err != nil || !strings.Contains(out, want) {
+			t.Errorf("preview lacks %q: %v\n%s", want, err, out)
+		}
+	}
+	// Once Antigravity has the delegate, the reference resolves.
+	writeFile(t, filepath.Join(home, ".gemini", "config", "agents", "fixer.md"), "---\nname: fixer\ndescription: f\n---\n")
+	if out, err := run(t, "convert", reviewer, "--to", "antigravity"); err != nil || strings.Contains(out, "refers to") {
+		t.Errorf("a delegate Antigravity has was reported: %v\n%s", err, out)
+	}
+
+	dst := t.TempDir()
+	if _, err := run(t, "convert", reviewer, "--to", "codex", "--out", dst); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "reviewer.toml")); err != nil || !strings.Contains(string(data), "developer_instructions = '''") {
+		t.Errorf("the Codex role was not written: %v\n%s", err, data)
+	}
+	if _, err := run(t, "convert", reviewer, "--to", "codex", "--out", dst); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("an existing role was replaced without --force: %v", err)
+	}
+	if _, err := run(t, "convert", reviewer, "--to", "codex", "--out", dst, "--force"); err != nil {
+		t.Errorf("--force: %v", err)
+	}
+	// An agent goes into --out itself, so a linked --out is followed, as it is for a skill.
+	linkedOut := filepath.Join(t.TempDir(), "linked")
+	if err := os.Symlink(dst, linkedOut); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(t, "convert", reviewer, "--to", "antigravity", "--out", linkedOut); err != nil {
+		t.Errorf("a linked --out: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "reviewer.md")); err != nil {
+		t.Errorf("the agent did not land behind the link: %v", err)
+	}
+
+	role := filepath.Join(home, ".codex", "agents", "worker.toml")
+	writeFile(t, role, "name = \"worker\"\ndescription = \"w\"\ndeveloper_instructions = \"Work.\"\n")
+	if out, err := run(t, "convert", role, "--to", "claude"); err != nil || !strings.Contains(out, "Codex agent worker -> Claude Code agent worker") {
+		t.Errorf("Codex role: %v\n%s", err, out)
+	}
+
+	loose := filepath.Join(t.TempDir(), "loose.md")
+	writeFile(t, loose, "---\nname: loose\ndescription: l\n---\nbody\n")
+	writeFile(t, filepath.Join(home, "skills", "s", "SKILL.md"), "---\nname: s\ndescription: d\n---\n")
+	writeFile(t, filepath.Join(home, "skills", "s", "notes.md"), "notes\n")
+	if _, err := run(t, "convert", loose, "--kind", "agent", "--to", "codex"); err == nil || !strings.Contains(err.Error(), "--from") {
+		t.Errorf("an agent outside every agents directory: %v", err)
+	}
+	if _, err := run(t, "convert", loose, "--to", "codex"); err == nil || !strings.Contains(err.Error(), "--kind agent") {
+		t.Errorf("a loose file without --from does not suggest --kind agent: %v", err)
+	}
+	if out, err := run(t, "convert", loose, "--kind", "agent", "--from", "claude", "--to", "codex"); err != nil || !strings.Contains(out, "Codex agent loose") {
+		t.Errorf("--kind agent --from claude: %v\n%s", err, out)
+	}
+	if out, err := run(t, "convert", loose, "--kind", "command", "--from", "claude", "--to", "codex"); err != nil || !strings.Contains(out, "Claude Code command loose") {
+		t.Errorf("--kind command: %v\n%s", err, out)
+	}
+	for name, args := range map[string][]string{
+		"unknown kind":                 {"convert", loose, "--kind", "rule", "--to", "codex"},
+		"agent directory":              {"convert", agents, "--kind", "agent", "--to", "codex"},
+		"skill from a file":            {"convert", loose, "--kind", "skill", "--to", "codex"},
+		"bad --from":                   {"convert", reviewer, "--from", "cursor", "--to", "codex"},
+		"unreadable agent":             {"convert", filepath.Join(home, ".gemini", "config", "agents", "fixer.md"), "--to", "codex"},
+		"skill from a file in a skill": {"convert", filepath.Join(home, "skills", "s", "notes.md"), "--kind", "skill", "--to", "codex"},
+	} {
+		if _, err := run(t, args...); err == nil {
+			t.Errorf("%s: converted", name)
+		}
+	}
+}
+
+// TestAgentsSharingAName puts two agents with one name in ~/.claude/agents: Claude Code loads one of
+// them, so neither converts and scan says why.
+func TestAgentsSharingAName(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	agents := filepath.Join(home, ".claude", "agents")
+	writeFile(t, filepath.Join(agents, "a.md"), "---\nname: dup\ndescription: d\n---\nbody\n")
+	writeFile(t, filepath.Join(agents, "team", "b.md"), "---\nname: dup\ndescription: d\n---\nbody\n")
+	if _, err := run(t, "convert", filepath.Join(agents, "a.md"), "--to", "codex"); err == nil || !strings.Contains(err.Error(), "is also named dup") {
+		t.Errorf("an agent sharing its name converted: %v", err)
+	}
+	// Read as Claude Code's explicitly, the same check applies.
+	if _, err := run(t, "convert", filepath.Join(agents, "a.md"), "--from", "claude", "--to", "codex"); err == nil {
+		t.Error("--from claude skipped the name check")
+	}
+	if out, err := run(t, "scan", "--tool", "claude"); err != nil || strings.Count(out, "skipped (") != 2 {
+		t.Errorf("scan = %q, %v", out, err)
 	}
 }

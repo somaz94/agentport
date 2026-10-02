@@ -163,6 +163,37 @@ func TestMarshalWithoutFrontmatter(t *testing.T) {
 	}
 }
 
+// TestMarshalDescriptionBeyondBMP checks the description yaml.v3 would double-quote and escape
+// because it holds characters beyond U+FFFF: single-quoted when quotes can hold it, and every form
+// parsing back to the same text.
+func TestMarshalDescriptionBeyondBMP(t *testing.T) {
+	for desc, want := range map[string]string{
+		"buckets 🔴/🟡/🟢, user's":        "description: 'buckets 🔴/🟡/🟢, user''s'\n",
+		"plain: `x`":                   "description: 'plain: `x`'\n",
+		"🔴 then a\nbreak":              `description: "\U0001F534 then a\nbreak"` + "\n",
+		"🔴 and a line separator\u2028": "description: \"\\U0001F534 and a line separator\\L\"\n",
+	} {
+		d := &Document{Body: "body\n"}
+		d.SetString("name", "a")
+		d.SetString("description", desc)
+		d.SetString("after", "agentport-description-placeholder")
+		out, err := d.Marshal()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(out), want) {
+			t.Errorf("Marshal(%q) =\n%s\nwant a line %q", desc, out, want)
+		}
+		back := mustParse(t, string(out))
+		if got, _ := back.Scalar("description"); got != desc || back.Repaired {
+			t.Errorf("%q came back as %q (repaired %v)", desc, got, back.Repaired)
+		}
+		if got, _ := back.Scalar("after"); got != "agentport-description-placeholder" {
+			t.Errorf("a value equal to the placeholder changed to %q", got)
+		}
+	}
+}
+
 func TestMarshalDoesNotWrapLongValues(t *testing.T) {
 	long := strings.Repeat("word ", 60)
 	d := &Document{}
@@ -219,4 +250,38 @@ func decodeAll(t *testing.T, d *Document) map[string]any {
 		}
 	}
 	return m
+}
+
+// TestMarshalDescriptionFallback covers descriptions whose line carries more than the key, which keep
+// yaml.v3's double quotes, and a nested value equal to the placeholder, which is left alone.
+func TestMarshalDescriptionFallback(t *testing.T) {
+	for name, in := range map[string]string{
+		"comment":        "---\ndescription: '🔴 x' # note\n---\n",
+		"quoted key":     "---\n'description': '🔴 x'\n---\n",
+		"anchor":         "---\ndescription: &d '🔴 x'\n---\n",
+		"flow mapping":   "---\n{name: a, description: '🔴 x'}\n---\n",
+		"nested earlier": "---\nmeta:\n  description: agentport-description-placeholder\ndescription: '🔴 x'\n---\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, err := mustParse(t, in).Marshal()
+			if err != nil {
+				t.Fatal(err)
+			}
+			back := mustParse(t, string(out))
+			if got, _ := back.Scalar("description"); got != "🔴 x" || back.Repaired {
+				t.Errorf("description came back as %q from\n%s", got, out)
+			}
+			if n, ok := back.Get("meta"); ok && n.Content[1].Value != "agentport-description-placeholder" {
+				t.Errorf("a nested value changed:\n%s", out)
+			}
+		})
+	}
+	// Invalid UTF-8 is never written raw: yaml.v3 refuses it.
+	d := &Document{}
+	d.SetString("description", "🔴 \xff")
+	if out, err := d.Marshal(); err == nil {
+		if _, perr := Parse(out); perr != nil {
+			t.Errorf("invalid UTF-8 produced unparsable output:\n%q", out)
+		}
+	}
 }

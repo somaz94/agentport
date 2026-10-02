@@ -1,0 +1,55 @@
+== read-only-reviewer.md (0644)
+---
+name: read-only-reviewer
+description: 'Reviews anything it is given and never changes files.'
+tools:
+  - view_file
+  - grep_search
+  - find_by_name
+  - list_dir
+  - run_command
+  - manage_task
+  - read_url_content
+  - search_web
+  - invoke_subagent
+  - ask_question
+mainAgent: false
+---
+Read what you are given and report findings; do not edit anything.
+== loss report
+[
+  {
+    "source": "Claude Code agent read-only-reviewer",
+    "target": "Antigravity agent read-only-reviewer",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "tools",
+        "status": "transformed",
+        "detail": "Claude Code tool names written as Antigravity's"
+      },
+      {
+        "field": "tools",
+        "status": "dropped",
+        "detail": "no Antigravity tool for: plan"
+      },
+      {
+        "field": "disallowedTools",
+        "status": "transformed",
+        "detail": "the denied tools were left out of tools"
+      },
+      {
+        "field": "mainAgent",
+        "status": "mapped",
+        "detail": "false: a subagent stays out of the agent picker, as in the source"
+      }
+    ]
+  }
+]

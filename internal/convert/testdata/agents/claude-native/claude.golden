@@ -1,0 +1,38 @@
+== notes-keeper.md (0644)
+---
+name: notes-keeper
+description: 'Keeps the running notes for a session.'
+model: inherit
+effort: 3
+skills: alpha, beta
+---
+Append each decision to the notes with its reason.
+== loss report
+[
+  {
+    "source": "Claude Code agent notes-keeper",
+    "target": "Claude Code agent notes-keeper",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "model",
+        "status": "mapped"
+      },
+      {
+        "field": "effort",
+        "status": "mapped"
+      },
+      {
+        "field": "skills",
+        "status": "mapped"
+      }
+    ]
+  }
+]
