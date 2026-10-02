@@ -22,6 +22,9 @@ const CodexSidecar = "agents/openai.yaml"
 // Its content is carried by the IR's invocation flags, so other targets do not need the file.
 const GeneratedSidecar = "policy:\n  allow_implicit_invocation: false\n"
 
+// DefaultSidecar states the policy a missing sidecar implies.
+const DefaultSidecar = "policy:\n  allow_implicit_invocation: true\n"
+
 // PortableKeys are Agent Skills fields every harness accepts in SKILL.md without acting on them
 // differently, so they travel as-is.
 var PortableKeys = map[string]bool{"license": true, "compatibility": true, "metadata": true}
@@ -33,6 +36,34 @@ type Target struct {
 	Prefix string
 }
 
+// Options are the conversion choices a user can change.
+type Options struct {
+	// ModelInvocableCommands lets the model start converted commands, as Claude Code does. Off by
+	// default, so a mutating workflow never starts from a description match alone.
+	ModelInvocableCommands bool
+}
+
+// UserOnlyDetail explains, in a loss report, why a converted command lost model invocation. It
+// names no switch, since convert and sync turn it back on differently.
+const UserOnlyDetail = "converted commands start only when invoked by name, so a workflow never starts from a description match; Claude Code also lets the model start them"
+
+// UserOnly reports whether a command converted with opts must start only when the user invokes it.
+// A command the user cannot invoke keeps model invocation, or nothing could start it.
+func UserOnly(item *ir.Item, opts Options) bool {
+	return item.Kind == ir.KindCommand && !opts.ModelInvocableCommands &&
+		item.Invocation.ModelInvocable && item.Invocation.UserInvocable
+}
+
+// ReportRename records a command whose skill name differs from its file path, because the path
+// nests or has capitals, and reports whether it did.
+func ReportRename(item *ir.Item, r *loss.Report) bool {
+	if item.Kind != ir.KindCommand || item.Source.Rel == "" || strings.TrimSuffix(item.Source.Rel, ".md") == item.Name {
+		return false
+	}
+	r.Addf("name", loss.Transformed, "derived from the command path %s; a skill name is lowercase and cannot nest", item.Source.Rel)
+	return true
+}
+
 // ForeignSkill builds the frontmatter and body a non-Claude target starts from — name,
 // description, carried-over extensions and the arguments preamble — and records what happened to
 // each field. Invocation flags are left to the caller, which knows the target's keys.
@@ -41,9 +72,10 @@ func ForeignSkill(item *ir.Item, t Target, r *loss.Report) *frontmatter.Document
 	body, _ := args.Strip(item.Body)
 
 	doc.SetString("name", item.Name)
+	renamed := ReportRename(item, r)
 	if err := ir.ValidateSkillName(item.Name); err != nil {
 		r.Addf("name", loss.Warn, "%v; %s accepts it, other harnesses may not", err, t.Harness.Title())
-	} else {
+	} else if !renamed {
 		r.Add("name", loss.Mapped, "")
 	}
 
@@ -137,7 +169,7 @@ func Resources(item *ir.Item, t Target, r *loss.Report) []ir.Resource {
 	n := 0
 	for _, res := range item.Resources {
 		if res.Path == CodexSidecar && t.Harness != harness.Codex {
-			if string(res.Data) == GeneratedSidecar && !item.Invocation.ModelInvocable {
+			if s := string(res.Data); s == GeneratedSidecar && !item.Invocation.ModelInvocable || s == DefaultSidecar && item.Invocation.ModelInvocable {
 				r.Add(CodexSidecar, loss.Mapped, "its policy is carried by the invocation flags; the file is not copied")
 				continue
 			}

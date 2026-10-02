@@ -38,14 +38,18 @@ func ReadSkill(dir string) (*ir.Item, error) {
 	return item, nil
 }
 
-// WriteSkill renders item as an Antigravity skill directory.
-func WriteSkill(item *ir.Item) ([]ir.Resource, loss.Report, error) {
+// WriteSkill renders item as an Antigravity skill directory; a command becomes a skill.
+func WriteSkill(item *ir.Item, opts common.Options) ([]ir.Resource, loss.Report, error) {
 	var r loss.Report
 	native := item.Source.Harness == harness.Antigravity
 	doc := common.ForeignSkill(item, target, &r)
-	if !item.Invocation.ModelInvocable {
+	switch {
+	case !item.Invocation.ModelInvocable:
 		doc.Set("disable-model-invocation", common.BoolNode(true))
 		r.Add("disable-model-invocation", loss.Mapped, "")
+	case common.UserOnly(item, opts):
+		doc.Set("disable-model-invocation", common.BoolNode(true))
+		r.Add("disable-model-invocation", loss.Transformed, common.UserOnlyDetail)
 	}
 	if !item.Invocation.UserInvocable {
 		doc.Set("disable-slash-command", common.BoolNode(true))

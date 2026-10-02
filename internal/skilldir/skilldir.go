@@ -19,9 +19,9 @@ import (
 const Entry = "SKILL.md"
 
 // Read parses dir/SKILL.md and returns every other regular file under dir, slash-separated and in
-// path order, with its mode. Python caches and .DS_Store are skipped silently; symlinked
-// directories and special files are skipped with a note, so the loss report can say so. A
-// symlinked skill directory is read through its link.
+// path order, with its mode. Python caches, editor swap and backup files and .DS_Store are skipped
+// silently; symlinked directories and special files are skipped with a note, so the loss report can
+// say so. A symlinked skill directory is read through its link.
 func Read(dir string) (*frontmatter.Document, []ir.Resource, []ir.Note, error) {
 	root, err := filepath.EvalSymlinks(dir)
 	if err != nil {
@@ -50,7 +50,7 @@ func Read(dir string) (*frontmatter.Document, []ir.Resource, []ir.Note, error) {
 		switch {
 		case d.IsDir() && d.Name() == "__pycache__":
 			return filepath.SkipDir
-		case d.IsDir(), rel == Entry, d.Name() == ".DS_Store", strings.HasSuffix(d.Name(), ".pyc"):
+		case d.IsDir(), rel == Entry, leftover(d.Name()):
 			return nil
 		}
 		info, err := os.Stat(p)
@@ -80,6 +80,17 @@ func Read(dir string) (*frontmatter.Document, []ir.Resource, []ir.Note, error) {
 		return nil, nil, nil, fmt.Errorf("read %s: %w", dir, err)
 	}
 	return doc, res, notes, nil
+}
+
+func leftover(name string) bool {
+	if name == ".DS_Store" || strings.HasSuffix(name, "~") {
+		return true
+	}
+	switch path.Ext(name) {
+	case ".pyc", ".swp", ".swo":
+		return true
+	}
+	return false
 }
 
 // Layout returns SKILL.md followed by the resources in path order, ready to write under a skill

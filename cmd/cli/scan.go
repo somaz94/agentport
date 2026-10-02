@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,7 +21,6 @@ import (
 	"github.com/somaz94/agentport/internal/ir"
 	"github.com/somaz94/agentport/internal/loss"
 	"github.com/somaz94/agentport/internal/paths"
-	"github.com/somaz94/agentport/internal/skilldir"
 )
 
 var scanKinds = []ir.Kind{ir.KindSkill, ir.KindCommand, ir.KindAgent}
@@ -45,6 +45,8 @@ type Entry struct {
 	Name      string                `json:"name"`
 	Path      string                `json:"path"`
 	Targets   map[harness.ID]Target `json:"targets,omitempty"`
+	// Skipped says why a command would not be converted at all.
+	Skipped string `json:"skipped,omitempty"`
 }
 
 func newScanCmd(opts *options) *cobra.Command {
@@ -52,8 +54,9 @@ func newScanCmd(opts *options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "scan",
 		Short: "List the customizations at each harness location and how portable each is",
-		Long: "List skills, commands and agents at every harness location for a scope. For each skill,\n" +
-			"convert it in memory to the other harnesses and summarize what would be lost.",
+		Long: "List skills, commands and agents at every harness location for a scope. Convert each\n" +
+			"skill and command in memory to the other harnesses and summarize what would be lost; a\n" +
+			"command whose skill name is taken is listed as skipped.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			entries, warnings, err := scan(s)
@@ -98,6 +101,7 @@ func scan(s *scanOptions) ([]Entry, []string, error) {
 	}
 
 	byPath := map[string]*Entry{}
+	commandDirs := map[harness.ID]convert.CommandDirs{}
 	var order, warnings []string
 	for _, h := range tools {
 		layout, err := paths.For(h)
@@ -108,6 +112,11 @@ func scan(s *scanOptions) ([]Entry, []string, error) {
 			rel, err := layout.Dir(scope, kind)
 			if err != nil {
 				continue
+			}
+			if kind == ir.KindCommand {
+				if skills, err := layout.Dir(scope, ir.KindSkill); err == nil {
+					commandDirs[h] = convert.CommandDirs{Harness: h, Commands: filepath.Join(root, rel), Skills: filepath.Join(root, skills)}
+				}
 			}
 			found, warn := listItems(h, kind, filepath.Join(root, rel))
 			warnings = append(warnings, warn...)
@@ -124,11 +133,35 @@ func scan(s *scanOptions) ([]Entry, []string, error) {
 		}
 	}
 
+	shadowed := map[harness.ID]map[string]string{}
+	unchecked := map[harness.ID]string{}
+	for h, d := range commandDirs {
+		m, err := convert.Shadowed(d)
+		if err != nil {
+			// listItems has already warned about the directory; convert refuses these commands too.
+			unchecked[h] = "name collisions not checked: " + err.Error()
+			continue
+		}
+		shadowed[h] = m
+	}
+
 	entries := make([]Entry, 0, len(order))
 	for _, p := range order {
 		e := byPath[p]
-		if e.Kind == ir.KindSkill {
-			e.Targets = skillPortability(e.Harnesses, p)
+		switch e.Kind {
+		case ir.KindSkill:
+			item, err := convert.ReadSkill(convert.Owner(p, e.Harnesses), p)
+			e.Targets = convertTargets(item, err, e.Harnesses)
+		case ir.KindCommand:
+			h := e.Harnesses[0]
+			rel, _ := filepath.Rel(commandDirs[h].Commands, p)
+			rel = filepath.ToSlash(rel)
+			if why := cmp.Or(shadowed[h][rel], unchecked[h]); why != "" {
+				e.Skipped = why
+				break
+			}
+			item, err := convert.ReadCommand(h, p, rel)
+			e.Targets = convertTargets(item, err, e.Harnesses)
 		}
 		entries = append(entries, *e)
 	}
@@ -157,30 +190,33 @@ func listItems(h harness.ID, kind ir.Kind, dir string) ([]found, []string) {
 	var warnings []string
 	switch kind {
 	case ir.KindSkill:
-		entries, err := os.ReadDir(dir)
+		dirs, err := convert.SkillDirs(h, dir)
 		if err != nil {
 			return nil, []string{err.Error()}
 		}
-		for _, d := range entries {
-			p := filepath.Join(dir, d.Name())
-			// synced/ holds skills claude.ai manages, not the user's own.
-			if h == harness.Claude && d.Name() == "synced" {
-				continue
-			}
-			// Stat, not the DirEntry, so a symlinked skill directory counts.
-			if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
-				continue
-			}
-			if _, err := os.Stat(filepath.Join(p, skilldir.Entry)); err == nil {
-				out = append(out, found{d.Name(), p})
-			}
+		for _, p := range dirs {
+			out = append(out, found{filepath.Base(p), p})
+		}
+	case ir.KindCommand:
+		rels, warn, err := convert.CommandFiles(dir)
+		if err != nil {
+			return nil, []string{err.Error()}
+		}
+		warnings = warn
+		for _, rel := range rels {
+			out = append(out, found{strings.TrimSuffix(rel, ".md"), filepath.Join(dir, filepath.FromSlash(rel))})
 		}
 	default:
 		ext := ".md"
 		if h == harness.Codex && kind == ir.KindAgent {
 			ext = ".toml"
 		}
-		_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		// WalkDir does not enter a symlinked root; Claude Code and Codex read through one.
+		walkRoot, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			return nil, []string{err.Error()}
+		}
+		_ = filepath.WalkDir(walkRoot, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				warnings = append(warnings, err.Error())
 				if d != nil && d.IsDir() {
@@ -191,8 +227,8 @@ func listItems(h harness.ID, kind ir.Kind, dir string) ([]found, []string) {
 			if d.IsDir() || filepath.Ext(p) != ext {
 				return nil
 			}
-			rel, _ := filepath.Rel(dir, p)
-			out = append(out, found{strings.TrimSuffix(filepath.ToSlash(rel), ext), p})
+			rel, _ := filepath.Rel(walkRoot, p)
+			out = append(out, found{strings.TrimSuffix(filepath.ToSlash(rel), ext), filepath.Join(dir, rel)})
 			return nil
 		})
 	}
@@ -200,10 +236,10 @@ func listItems(h harness.ID, kind ir.Kind, dir string) ([]found, []string) {
 	return out, warnings
 }
 
-// skillPortability converts a skill to every harness that does not already load it.
-func skillPortability(owners []harness.ID, dir string) map[harness.ID]Target {
+// convertTargets converts item, which reading returned with err, to every harness that does not
+// already load it.
+func convertTargets(item *ir.Item, err error, owners []harness.ID) map[harness.ID]Target {
 	targets := map[harness.ID]Target{}
-	item, err := convert.ReadSkill(convert.Owner(dir, owners), dir)
 	for _, to := range harness.All {
 		if slices.Contains(owners, to) {
 			continue
@@ -212,7 +248,7 @@ func skillPortability(owners []harness.ID, dir string) map[harness.ID]Target {
 			targets[to] = Target{Error: err.Error()}
 			continue
 		}
-		res, cerr := convert.Skill(item, to)
+		res, cerr := convert.Skill(item, to, convert.Options{})
 		if cerr != nil {
 			targets[to] = Target{Error: cerr.Error()}
 			continue
@@ -255,6 +291,9 @@ func writeScan(w io.Writer, format string, entries []Entry) error {
 }
 
 func portability(e Entry) string {
+	if e.Skipped != "" {
+		return "skipped (" + e.Skipped + ")"
+	}
 	if e.Targets == nil {
 		return "-"
 	}

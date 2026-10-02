@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/somaz94/agentport/internal/adapters/common"
 	"github.com/somaz94/agentport/internal/harness"
 	"github.com/somaz94/agentport/internal/skilldir"
 )
@@ -28,8 +29,9 @@ type loadedSkill struct {
 	DisableSlashCommand    bool   `json:"disableSlashCommand"`
 }
 
-// TestAntigravityLoadsConvertedSkills writes every fixture as an Antigravity skill into a scratch
-// config root, starts the app's language server against it, and checks what the loader parsed.
+// TestAntigravityLoadsConvertedSkills writes every skill and command fixture as an Antigravity
+// skill into a scratch config root, starts the app's language server against it, and checks what
+// the loader parsed.
 func TestAntigravityLoadsConvertedSkills(t *testing.T) {
 	bin := os.Getenv(LanguageServerEnv)
 	if bin == "" {
@@ -43,7 +45,7 @@ func TestAntigravityLoadsConvertedSkills(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		res, err := Skill(item, harness.Antigravity)
+		res, err := Skill(item, harness.Antigravity, Options{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,6 +55,21 @@ func TestAntigravityLoadsConvertedSkills(t *testing.T) {
 		want[item.Name] = loadedSkill{
 			Name:                   item.Name,
 			DisableModelInvocation: !item.Invocation.ModelInvocable,
+			DisableSlashCommand:    !item.Invocation.UserInvocable,
+		}
+	}
+	for _, name := range commandCases {
+		item := readCommandCase(t, name)
+		res, err := Skill(item, harness.Antigravity, Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := skilldir.Write(filepath.Join(skillsDir, item.Name), res.Files); err != nil {
+			t.Fatal(err)
+		}
+		want[item.Name] = loadedSkill{
+			Name:                   item.Name,
+			DisableModelInvocation: !item.Invocation.ModelInvocable || common.UserOnly(item, Options{}),
 			DisableSlashCommand:    !item.Invocation.UserInvocable,
 		}
 	}

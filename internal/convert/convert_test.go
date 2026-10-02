@@ -51,7 +51,7 @@ func TestSkillGolden(t *testing.T) {
 					t.Fatal(err)
 				}
 				item.Source.Path = ""
-				res, err := Skill(item, to)
+				res, err := Skill(item, to, Options{})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -71,7 +71,7 @@ func TestRoundTripThroughEachTarget(t *testing.T) {
 		}
 		for _, via := range []harness.ID{harness.Codex, harness.Antigravity} {
 			t.Run(name+"/"+string(via), func(t *testing.T) {
-				out, err := Skill(src, via)
+				out, err := Skill(src, via, Options{})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -83,7 +83,7 @@ func TestRoundTripThroughEachTarget(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				back, err := Skill(mid, harness.Claude)
+				back, err := Skill(mid, harness.Claude, Options{})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -120,10 +120,10 @@ func writeTemp(t *testing.T, res Result) string {
 
 func TestCodexRejectsLongNames(t *testing.T) {
 	item := &ir.Item{Kind: ir.KindSkill, Name: string(bytes.Repeat([]byte("a"), 65)), Invocation: ir.Invocation{UserInvocable: true, ModelInvocable: true}}
-	if _, err := Skill(item, harness.Codex); err == nil {
+	if _, err := Skill(item, harness.Codex, Options{}); err == nil {
 		t.Error("Codex accepted a 65-character skill name")
 	}
-	if _, err := Skill(item, "cursor"); err == nil {
+	if _, err := Skill(item, "cursor", Options{}); err == nil {
 		t.Error("an unknown target succeeded")
 	}
 	if _, err := ReadSkill("cursor", "."); err == nil {
@@ -183,7 +183,7 @@ func TestReportsAreValidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := Skill(item, harness.Antigravity)
+	res, err := Skill(item, harness.Antigravity, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

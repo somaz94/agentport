@@ -2,6 +2,10 @@
 package claude
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+
 	"go.yaml.in/yaml/v3"
 
 	"github.com/somaz94/agentport/internal/adapters/common"
@@ -26,32 +30,74 @@ var skillKeys = map[string]bool{
 
 // ReadSkill reads a Claude Code skill directory.
 func ReadSkill(dir string) (*ir.Item, error) {
-	return common.ReadSkill(dir, harness.Claude, func(item *ir.Item, key string, n *yaml.Node) (bool, error) {
-		switch key {
-		case "argument-hint":
-			item.Invocation.ArgumentHint = common.Text(n)
-		case "disable-model-invocation":
-			b, err := common.Bool(key, n)
-			item.Invocation.ModelInvocable = !b
-			return true, err
-		case "user-invocable":
-			b, err := common.Bool(key, n)
-			item.Invocation.UserInvocable = b
-			return true, err
-		default:
-			return false, nil
-		}
-		return true, nil
-	})
+	return common.ReadSkill(dir, harness.Claude, claim)
 }
 
-// WriteSkill renders item as a Claude Code skill directory.
-func WriteSkill(item *ir.Item) ([]ir.Resource, loss.Report, error) {
+// ReadCommand reads the Claude Code command file path. rel, its path below the commands directory,
+// names it through ir.CommandSkillName; an empty rel uses the file name.
+func ReadCommand(path, rel string) (*ir.Item, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := frontmatter.Parse(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if rel == "" {
+		rel = filepath.Base(path)
+	}
+	rel = filepath.ToSlash(rel)
+	item := &ir.Item{
+		Kind:       ir.KindCommand,
+		Name:       ir.CommandSkillName(rel),
+		Body:       doc.Body,
+		Invocation: ir.Invocation{UserInvocable: true, ModelInvocable: true},
+		Source:     ir.Source{Harness: harness.Claude, Path: path, Rel: rel},
+	}
+	err = common.Fields(item, doc, func(item *ir.Item, key string, n *yaml.Node) (bool, error) {
+		// Carrying either into a skill would give it an effect it never had as a command.
+		if key == "name" || key == "paths" {
+			item.Notes = append(item.Notes, ir.Note{Field: key, Detail: "Claude Code ignores it in a command; not carried over"})
+			return true, nil
+		}
+		return claim(item, key, n)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return item, nil
+}
+
+// claim handles the invocation keys skills and commands share.
+func claim(item *ir.Item, key string, n *yaml.Node) (bool, error) {
+	switch key {
+	case "argument-hint":
+		item.Invocation.ArgumentHint = common.Text(n)
+	case "disable-model-invocation":
+		b, err := common.Bool(key, n)
+		item.Invocation.ModelInvocable = !b
+		return true, err
+	case "user-invocable":
+		b, err := common.Bool(key, n)
+		item.Invocation.UserInvocable = b
+		return true, err
+	default:
+		return false, nil
+	}
+	return true, nil
+}
+
+// WriteSkill renders item as a Claude Code skill directory; a command becomes a skill with the
+// same behavior, so the options, which only concern other targets, do not apply.
+func WriteSkill(item *ir.Item, _ common.Options) ([]ir.Resource, loss.Report, error) {
 	var r loss.Report
 	native := item.Source.Harness == harness.Claude
 	doc := &frontmatter.Document{}
 	doc.SetString("name", item.Name)
-	r.Add("name", loss.Mapped, "")
+	if !common.ReportRename(item, &r) {
+		r.Add("name", loss.Mapped, "")
+	}
 	if item.Description != "" {
 		doc.SetString("description", item.Description)
 		r.Add("description", loss.Mapped, "")

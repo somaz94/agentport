@@ -15,7 +15,7 @@
 make build        # ./bin/agentport
 make test         # go test ./... -v -race -cover
 make cover        # coverage report
-make cover-check  # fail below COVER_MIN (cmd/main.go is excluded; it only calls cli.Execute)
+make cover-check  # fail below COVER_MIN (cmd/main.go is excluded; it only calls into cmd/cli)
 make fmt          # go fmt
 make vet          # go vet
 make ci           # fmt-check, vet, test, cover-check, build
@@ -28,8 +28,9 @@ make ci           # fmt-check, vet, test, cover-check, build
 Converter and CLI output is compared with files under `testdata/`. After an intended output change:
 
 ```bash
-make golden       # AGENTPORT_UPDATE_GOLDEN=1 go test ./...
-git diff testdata # review every changed line before committing
+make golden                                # AGENTPORT_UPDATE_GOLDEN=1 go test ./...
+git status --short -uall -- '*/testdata/*' # new golden files are untracked and show only here
+git diff -- '*/testdata/*'                 # review every changed line before committing
 ```
 
 The switch is an environment variable rather than a `-update` flag because `go test ./... -update` fails in every package that does not define the flag.
@@ -40,9 +41,9 @@ Fixtures are written by hand. Do not copy a real harness configuration into `tes
 
 ## Verifying a harness fact
 
-Every row in `docs/spec/` names its evidence. To re-verify Antigravity, run its bundled language server against a scratch config root and read the parsed result back over its local RPC; the exact commands are in the Reproduce section of [spec/antigravity.md](spec/antigravity.md). Codex facts are checked against the source at the pinned tag, Claude Code facts against its docs and binary.
+Every row in `docs/spec/` names its evidence. To re-verify Antigravity, run its bundled language server against a scratch config root and read the parsed result back over its local RPC; the exact commands are in the Reproduce section of [spec/antigravity.md](spec/antigravity.md#reproduce). Codex facts are checked against the source at the pinned tag, Claude Code facts against its docs and binary.
 
-`make e2e-antigravity` does this for the converter: it writes every skill fixture as an Antigravity skill into a scratch root, starts the desktop app's language server against it, and checks that the loader parsed each one with the expected flags. It needs the Antigravity desktop app (macOS path by default; override `AG_LANGUAGE_SERVER`) and is skipped by `make test` and CI.
+`make e2e-antigravity` does this for the converter: it writes every skill and command fixture as an Antigravity skill into a scratch root, starts the desktop app's language server against it, and checks that the loader parsed each one with the expected flags. It needs the Antigravity desktop app (macOS path by default; override `AG_LANGUAGE_SERVER`) and is skipped by `make test` and CI.
 
 <br/>
 

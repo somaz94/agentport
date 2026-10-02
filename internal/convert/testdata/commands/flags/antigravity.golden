@@ -1,0 +1,48 @@
+== SKILL.md (0644)
+---
+name: review
+description: 'Review the staged diff Before committing.'
+disable-model-invocation: true
+---
+Review the staged diff and report problems by severity.
+== loss report
+[
+  {
+    "source": "Claude Code command review",
+    "target": "Antigravity skill review",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "when_to_use",
+        "status": "transformed",
+        "detail": "appended to description, as Claude Code does in its listing"
+      },
+      {
+        "field": "model",
+        "status": "dropped",
+        "detail": "Antigravity has no counterpart"
+      },
+      {
+        "field": "name",
+        "status": "warn",
+        "detail": "Claude Code ignores it in a command; not carried over"
+      },
+      {
+        "field": "paths",
+        "status": "warn",
+        "detail": "Claude Code ignores it in a command; not carried over"
+      },
+      {
+        "field": "disable-model-invocation",
+        "status": "mapped"
+      }
+    ]
+  }
+]

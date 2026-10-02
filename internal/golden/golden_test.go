@@ -29,6 +29,8 @@ func must(t *testing.T, err error) {
 }
 
 func TestAssertCompares(t *testing.T) {
+	// make golden sets the switch for every package, this one included.
+	t.Setenv(UpdateEnv, "")
 	path := filepath.Join(t.TempDir(), "case.golden")
 	must(t, os.WriteFile(path, []byte("want\n"), 0o644))
 

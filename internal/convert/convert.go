@@ -23,9 +23,12 @@ import (
 // ErrAmbiguous means the path alone does not say which harness owns the item.
 var ErrAmbiguous = errors.New("cannot tell the source harness from the path")
 
+// Options are the conversion choices a user can change.
+type Options = common.Options
+
 type skillCodec struct {
 	read  func(string) (*ir.Item, error)
-	write func(*ir.Item) ([]ir.Resource, loss.Report, error)
+	write func(*ir.Item, common.Options) ([]ir.Resource, loss.Report, error)
 }
 
 var skills = map[harness.ID]skillCodec{
@@ -50,9 +53,9 @@ type Result struct {
 	Report loss.Report
 }
 
-// Skill converts item to harness to. The item name becomes a directory name, so a name that could
-// leave its directory is refused before anything is converted.
-func Skill(item *ir.Item, to harness.ID) (Result, error) {
+// Skill converts item, a skill or a command, to a skill of harness to. The item name becomes a
+// directory name, so a name that could leave its directory is refused before anything is converted.
+func Skill(item *ir.Item, to harness.ID, opts Options) (Result, error) {
 	c, ok := skills[to]
 	if !ok {
 		return Result{}, fmt.Errorf("no skill writer for %q", to)
@@ -60,11 +63,11 @@ func Skill(item *ir.Item, to harness.ID) (Result, error) {
 	if err := paths.ValidName(item.Name); err != nil {
 		return Result{}, fmt.Errorf("skill name: %w", err)
 	}
-	files, report, err := c.write(item)
+	files, report, err := c.write(item, opts)
 	if err != nil {
 		return Result{}, err
 	}
-	report.Source = fmt.Sprintf("%s skill %s", item.Source.Harness.Title(), item.Name)
+	report.Source = fmt.Sprintf("%s %s %s", item.Source.Harness.Title(), item.Kind, item.Name)
 	report.Target = fmt.Sprintf("%s skill %s", to.Title(), item.Name)
 	return Result{Item: item, Files: files, Report: report}, nil
 }
@@ -118,7 +121,8 @@ func Owner(dir string, owners []harness.ID) harness.ID {
 
 // WithTargetSidecar returns item with the Codex sidecar already present at targetDir added to its
 // resources, so rewriting an existing Codex skill updates that sidecar instead of replacing or
-// orphaning it. Items that bring their own sidecar are returned unchanged.
+// orphaning it. Items that bring their own sidecar are returned unchanged. A sidecar exactly as an
+// earlier conversion generated it holds nothing but that run's policy, so this run's flags decide.
 func WithTargetSidecar(item *ir.Item, targetDir string) (*ir.Item, error) {
 	for _, r := range item.Resources {
 		if r.Path == common.CodexSidecar {
@@ -131,6 +135,9 @@ func WithTargetSidecar(item *ir.Item, targetDir string) (*ir.Item, error) {
 	}
 	if err != nil {
 		return nil, err
+	}
+	if string(data) == common.GeneratedSidecar {
+		data = []byte(common.DefaultSidecar)
 	}
 	cp := *item
 	cp.Resources = append(slices.Clone(item.Resources), ir.Resource{Path: common.CodexSidecar, Mode: 0o644, Data: data})

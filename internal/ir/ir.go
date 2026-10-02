@@ -119,6 +119,9 @@ type Note struct {
 type Source struct {
 	Harness harness.ID
 	Path    string
+	// Rel is a command's slash-separated path below its commands directory, or its file name when
+	// it was read from outside one; the command's name is derived from it.
+	Rel string
 }
 
 // Item is one customization in harness-neutral form.
@@ -165,7 +168,8 @@ func ValidateSkillName(name string) error {
 
 // CommandSkillName derives a skill name from a command file path relative to its commands
 // directory: `frontend/component.md` becomes `frontend-component`, mirroring Claude's
-// `/frontend:component` namespace with a separator every harness accepts.
+// `/frontend:component` namespace with a separator every harness accepts. Distinct paths can derive
+// the same name (`A/b.md`, `a-b.md`), so callers check the whole commands directory for collisions.
 func CommandSkillName(rel string) string {
 	rel = strings.TrimSuffix(path.Clean(strings.ReplaceAll(rel, `\`, "/")), ".md")
 	return strings.ToLower(strings.ReplaceAll(rel, "/", "-"))

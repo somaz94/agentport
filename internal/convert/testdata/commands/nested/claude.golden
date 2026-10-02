@@ -1,0 +1,21 @@
+== SKILL.md (0644)
+---
+name: frontend-component
+---
+Scaffold a component named $0 under src/components.
+
+Ask before overwriting an existing file.
+== loss report
+[
+  {
+    "source": "Claude Code command frontend-component",
+    "target": "Claude Code skill frontend-component",
+    "entries": [
+      {
+        "field": "name",
+        "status": "transformed",
+        "detail": "derived from the command path frontend/Component.md; a skill name is lowercase and cannot nest"
+      }
+    ]
+  }
+]

@@ -58,7 +58,15 @@ Existing tools were considered first. rulesync supports all three harnesses but 
 
 ### Command → skill
 
-- Codex removed custom prompts and Antigravity deprecated workflows, so a command becomes a skill. Its name is its path under the commands directory with `/` replaced by `-` (Claude shows it as `/a:b`).
+- Codex removed custom prompts and Antigravity deprecated workflows, so a command becomes a skill. Its name is its path under the commands directory, lowercased, with `/` replaced by `-` (Claude shows it as `/a:b`). When the derived name differs from the file path, because the path nests or has capitals, the report marks `name` as `transformed`.
+- A command keeps its derived name only when nothing else claims it:
+  - A skill of the same name in the skills directory beside the commands directory wins, as it does in Claude Code ([spec/claude-code.md](spec/claude-code.md#commands-and-skills-are-one-system)). A skill's name is its `SKILL.md` `name`, or its directory name when `name` is missing or the frontmatter does not parse; claude.ai's `skills/synced/` does not count.
+  - Commands whose paths derive the same name (`A/b.md` and `a-b.md`) are all skipped, since none has a better claim to it.
+  - A file reached by two paths, through a link or a hard link, is skipped under both: Claude Code loads it once, under whichever path its walk reaches first, and agentport cannot tell which.
+  - When the skills directory cannot be read, no command can be checked, so none is converted.
+  - `scan` lists a skipped command with its reason, and `convert` refuses it.
+- Claude Code ignores `name` and `paths` in a command, so neither is carried over; each produces a `warn`. In a skill, `name` would rename it and `paths` would limit when it loads — effects the command never had.
+- Commands are listed the way Claude Code lists them ([spec/claude-code.md](spec/claude-code.md#commands-and-skills-are-one-system)): symbolic links are followed and keep their own names, each directory is entered once, under the first path in name order, and an unreadable directory or a broken link is skipped. `convert` takes the nearest enclosing commands directory from the location table (`internal/paths`), which also gives the skills directory checked for collisions, and refuses a command that this listing never reaches. A command outside every commands directory needs `--from`; it is named after its file and has nothing to collide with.
 - Neither target substitutes `$ARGUMENTS`. The body is left untouched and a marked preamble is prepended, so `adopt` can remove it exactly:
 
   ```markdown
@@ -67,8 +75,8 @@ Existing tools were considered first. rulesync supports all three harnesses but 
   <!-- agentport:args:end -->
   ```
 
-  A blockquote rather than a heading, so the preamble does not sit above the body's own title. Codex invokes skills as `$name`, so its preamble says so. Skills get the same preamble when their body uses a placeholder. Positional arguments, `` !`cmd` `` injection and `@file` references produce an `approximated` entry.
-- Converted commands are not model-invocable by default in either target — the Codex sidecar policy, Antigravity's `disable-model-invocation: true` — so a mutating workflow never starts from a description match alone. A setting in the config can turn it back on.
+  A blockquote rather than a heading, so the preamble does not sit above the body's own title. Codex invokes skills as `$name`, so its preamble says so. Skills get the same preamble when their body uses a placeholder. Other syntax from [Body substitution](spec/claude-code.md#body-substitution) that the target does not expand, such as positional and named arguments, `${CLAUDE_*}` variables, `` !`cmd` `` injection and `@path` references, stays as written and produces an `approximated` entry.
+- Converted commands are not model-invocable by default in either target — Antigravity's `disable-model-invocation: true`, Codex's sidecar `policy.allow_implicit_invocation: false` — so a mutating workflow never starts from a description match alone; the report marks it `transformed`. `convert --model-invocable` turns it back on, and a config setting does the same for `sync`. Two exceptions: a command with `user-invocable: false` keeps model invocation, since otherwise nothing could start it; and converting to a Claude Code skill keeps the command's original behavior.
 - An unquoted bracketed `argument-hint` is valid YAML and parses as a one-element sequence; the reader accepts that shape.
 
 <br/>

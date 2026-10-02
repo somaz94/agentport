@@ -1,0 +1,29 @@
+== SKILL.md (0644)
+---
+name: helper
+description: 'Background helper the model runs when a release is tagged'
+disable-slash-command: true
+---
+Collect the changes since the last tag for the release notes.
+== loss report
+[
+  {
+    "source": "Claude Code command helper",
+    "target": "Antigravity skill helper",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "user-invocable",
+        "status": "transformed",
+        "detail": "became disable-slash-command: true"
+      }
+    ]
+  }
+]

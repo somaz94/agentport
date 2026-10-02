@@ -30,6 +30,8 @@ Claude Code is agentport's hub, so this file describes what the **reader** must 
 
 Commands were merged into skills: `.claude/commands/deploy.md` and `.claude/skills/deploy/SKILL.md` both create `/deploy` (docs). A command accepts every skill key except `name` and `paths`; its name is the file name, and a subdirectory becomes a `:` namespace (`frontend/component.md` → `/frontend:component`). On a name collision the skill wins over the command (docs).
 
+Commands are listed by a loader that follows symbolic links: a linked directory, the commands directory itself included, is entered, and a linked file whose link name ends in `.md` is loaded, each under its path through the link, so a linked command is named after the link. Each directory is entered once, by device and inode, under the first path the walk reaches, which ends a link loop; an unreadable directory or a broken link is skipped. A file reached twice, through a link or a hard link, loads once, under the first path reached (binary).
+
 <br/>
 
 ## Skill frontmatter

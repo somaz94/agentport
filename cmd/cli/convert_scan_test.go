@@ -9,7 +9,10 @@ import (
 	"testing"
 )
 
-var fixture = filepath.Join("..", "..", "internal", "convert", "testdata", "skills")
+var (
+	fixture        = filepath.Join("..", "..", "internal", "convert", "testdata", "skills")
+	commandFixture = filepath.Join("..", "..", "internal", "convert", "testdata", "commands")
+)
 
 // copyTree copies a fixture directory, keeping file modes.
 func copyTree(t *testing.T, src, dst string) {
@@ -114,6 +117,7 @@ func TestConvertErrors(t *testing.T) {
 		"unknown --from": {"convert", src, "--from", "cursor", "--to", "codex"},
 		"no skill":       {"convert", t.TempDir(), "--from", "claude", "--to", "codex"},
 		"no argument":    {"convert", "--to", "codex"},
+		"missing path":   {"convert", filepath.Join(t.TempDir(), "missing.md"), "--to", "codex"},
 	}
 	for name, args := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -145,6 +149,7 @@ func home(t *testing.T) string {
 	writeFile(t, filepath.Join(h, ".claude", "skills", "broken", "SKILL.md"), "---\nname: [unclosed\n")
 	writeFile(t, filepath.Join(h, ".claude", "commands", "commit.md"), "---\ndescription: c\n---\n$ARGUMENTS\n")
 	writeFile(t, filepath.Join(h, ".claude", "commands", "frontend", "component.md"), "body\n")
+	writeFile(t, filepath.Join(h, ".claude", "commands", "demo-skill.md"), "shadowed by the skill\n")
 	writeFile(t, filepath.Join(h, ".claude", "agents", "reviewer.md"), "---\nname: reviewer\ndescription: r\n---\nbody\n")
 	copyTree(t, filepath.Join(fixture, "antigravity-flags", "skill"), filepath.Join(h, ".gemini", "config", "skills", "ag-skill"))
 	writeFile(t, filepath.Join(h, ".codex", "agents", "worker.toml"), "name = \"worker\"\n")
@@ -171,6 +176,7 @@ func TestScanUser(t *testing.T) {
 		"antigravity  agent    helper",
 		"codex        skill    codex-skill",
 		"broken",
+		"skipped (a skill named demo-skill exists and keeps the name)",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("scan output lacks %q:\n%s", want, out)
@@ -326,5 +332,165 @@ func TestScanSymlinksPermissionsAndSharedOwners(t *testing.T) {
 	e := entries[0]
 	if len(e.Harnesses) != 2 || len(e.Targets) != 1 || e.Targets["claude"].Lossy {
 		t.Errorf("a shared Antigravity skill should be graded only against Claude, losslessly: %+v", e)
+	}
+}
+
+func TestConvertCommand(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cmds := filepath.Join(home, ".claude", "commands")
+	copyTree(t, filepath.Join(commandFixture, "basic", "commands"), cmds)
+	writeFile(t, filepath.Join(cmds, "frontend", "Component.md"), "Scaffold $0.\n")
+	deploy := filepath.Join(cmds, "deploy.md")
+
+	out, err := run(t, "convert", deploy, "--to", "antigravity", "--print")
+	if err != nil || !strings.Contains(out, "Claude Code command deploy -> Antigravity skill deploy") ||
+		!strings.Contains(out, "disable-model-invocation: true") {
+		t.Errorf("command preview = %q, %v", out, err)
+	}
+	if out, err := run(t, "convert", deploy, "--to", "antigravity", "--print", "--model-invocable"); err != nil ||
+		strings.Contains(out, "disable-model-invocation: true") {
+		t.Errorf("--model-invocable preview = %q, %v", out, err)
+	}
+	if out, err := run(t, "convert", filepath.Join(cmds, "frontend", "Component.md"), "--to", "codex"); err != nil ||
+		!strings.Contains(out, "Codex skill frontend-component") {
+		t.Errorf("nested command = %q, %v", out, err)
+	}
+	dst := t.TempDir()
+	if _, err := run(t, "convert", deploy, "--to", "codex", "--out", dst); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "deploy", "agents", "openai.yaml")); err != nil {
+		t.Errorf("the Codex policy sidecar was not written: %v", err)
+	}
+
+	// A skill of the same name, or another command deriving it, keeps a command from converting.
+	writeFile(t, filepath.Join(home, ".claude", "skills", "deploy", "SKILL.md"), "---\nname: deploy\n---\n")
+	if _, err := run(t, "convert", deploy, "--to", "codex"); err == nil || !strings.Contains(err.Error(), "not converted") {
+		t.Errorf("a command shadowed by a skill: %v", err)
+	}
+	writeFile(t, filepath.Join(cmds, "Frontend-component.md"), "x\n")
+	if _, err := run(t, "convert", filepath.Join(cmds, "frontend", "Component.md"), "--to", "codex"); err == nil {
+		t.Error("two commands deriving one skill name converted")
+	}
+
+	// Outside every commands directory a command needs --from and is named after its file.
+	loose := filepath.Join(t.TempDir(), "Loose.md")
+	writeFile(t, loose, "body\n")
+	if _, err := run(t, "convert", loose, "--to", "codex"); err == nil || !strings.Contains(err.Error(), "--from") {
+		t.Errorf("an undetectable command: %v", err)
+	}
+	if out, err := run(t, "convert", loose, "--from", "claude", "--to", "codex"); err != nil || !strings.Contains(out, "Codex skill loose") {
+		t.Errorf("--from claude = %q, %v", out, err)
+	}
+	for _, from := range []string{"codex", "cursor"} {
+		if _, err := run(t, "convert", loose, "--from", from, "--to", "claude"); err == nil {
+			t.Errorf("--from %s read a command", from)
+		}
+	}
+	text := filepath.Join(t.TempDir(), "notes.txt")
+	writeFile(t, text, "x\n")
+	if _, err := run(t, "convert", text, "--from", "claude", "--to", "codex"); err == nil || !strings.Contains(err.Error(), "neither") {
+		t.Errorf("a non-Markdown file: %v", err)
+	}
+}
+
+// TestCommandsThroughLinks lays commands out behind symbolic links, which Claude Code follows, so
+// the name checks must see through them too.
+func TestCommandsThroughLinks(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	target, team := t.TempDir(), t.TempDir()
+	writeFile(t, filepath.Join(target, "deploy.md"), "---\ndescription: d\n---\nShip it.\n")
+	writeFile(t, filepath.Join(target, "team-x.md"), "x\n")
+	writeFile(t, filepath.Join(team, "x.md"), "x\n")
+	writeFile(t, filepath.Join(home, ".claude", "skills", "deploy", "SKILL.md"), "---\nname: deploy\n---\n")
+	cmds := filepath.Join(home, ".claude", "commands")
+	if err := os.Symlink(target, cmds); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(team, filepath.Join(target, "team")); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, rel := range []string{"deploy.md", "team-x.md", "team/x.md"} {
+		if _, err := run(t, "convert", filepath.Join(cmds, filepath.FromSlash(rel)), "--to", "codex"); err == nil || !strings.Contains(err.Error(), "not converted") {
+			t.Errorf("%s converted through a link: %v", rel, err)
+		}
+	}
+	if out, err := run(t, "scan", "--tool", "claude"); err != nil || !strings.Contains(out, "team/x") || strings.Count(out, "skipped (") != 3 {
+		t.Errorf("scan through links = %q, %v", out, err)
+	}
+
+	if os.Geteuid() == 0 {
+		t.Skip("root lists every directory")
+	}
+	// Reachable by path but not listable: Claude Code never loads it, so it has no name to keep.
+	locked := filepath.Join(target, "locked")
+	writeFile(t, filepath.Join(locked, "y.md"), "y\n")
+	if err := os.Chmod(locked, 0o111); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+	if _, err := run(t, "convert", filepath.Join(cmds, "locked", "y.md"), "--to", "codex"); err == nil || !strings.Contains(err.Error(), "never reaches it") {
+		t.Errorf("a command below an unlistable directory: %v", err)
+	}
+}
+
+// TestConvertCommandRerun converts a command into the same Codex directory with and without
+// --model-invocable: the policy agentport generated follows each run's flags.
+func TestConvertCommandRerun(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cmds := filepath.Join(home, ".claude", "commands")
+	copyTree(t, filepath.Join(commandFixture, "basic", "commands"), cmds)
+	dst := t.TempDir()
+	for i, flags := range [][]string{nil, {"--force", "--model-invocable"}, {"--force"}} {
+		out, err := run(t, append([]string{"convert", filepath.Join(cmds, "deploy.md"), "--to", "codex", "--out", dst}, flags...)...)
+		side, _ := os.ReadFile(filepath.Join(dst, "deploy", "agents", "openai.yaml"))
+		want := "allow_implicit_invocation: false"
+		if i == 1 {
+			want = "allow_implicit_invocation: true"
+		}
+		if err != nil || !strings.Contains(string(side), want) || strings.Contains(out, "kept it although") {
+			t.Errorf("run %d %v: sidecar %q, %v\n%s", i, flags, side, err, out)
+		}
+	}
+}
+
+// TestScanUncheckedCommands makes the skills directory unreadable: no command can be checked for a
+// skill of its name, so scan skips them all, as convert refuses them, and warns only once.
+func TestScanUncheckedCommands(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads every directory")
+	}
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, ".claude", "commands", "a-b.md"), "x\n")
+	writeFile(t, filepath.Join(root, ".claude", "commands", "A", "b.md"), "x\n")
+	skills := filepath.Join(root, ".claude", "skills")
+	if err := os.MkdirAll(skills, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(skills, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(skills, 0o755) })
+
+	cmd := NewRootCmd()
+	var stdout, stderr strings.Builder
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"scan", "--root", root, "--tool", "claude"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(stdout.String(), "skipped (name collisions not checked") != 2 {
+		t.Errorf("commands were graded without a name check:\n%s", stdout.String())
+	}
+	if strings.Count(stderr.String(), "warning:") != 1 {
+		t.Errorf("want one warning:\n%s", stderr.String())
+	}
+	if _, err := run(t, "convert", filepath.Join(root, ".claude", "commands", "a-b.md"), "--to", "codex"); err == nil || !strings.Contains(err.Error(), "check name collisions") {
+		t.Errorf("convert without a name check: %v", err)
 	}
 }

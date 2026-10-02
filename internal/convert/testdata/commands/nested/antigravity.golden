@@ -1,0 +1,47 @@
+== SKILL.md (0644)
+---
+name: frontend-component
+description: 'Scaffold a component named $0 under src/components.'
+disable-model-invocation: true
+---
+<!-- agentport:args:begin -->
+> **Arguments**: invoked as `/frontend-component`. The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text. `$0`, `$1`, … and `$ARGUMENTS[N]` are those arguments split like shell words, counting from zero.
+<!-- agentport:args:end -->
+
+Scaffold a component named $0 under src/components.
+
+Ask before overwriting an existing file.
+== loss report
+[
+  {
+    "source": "Claude Code command frontend-component",
+    "target": "Antigravity skill frontend-component",
+    "entries": [
+      {
+        "field": "name",
+        "status": "transformed",
+        "detail": "derived from the command path frontend/Component.md; a skill name is lowercase and cannot nest"
+      },
+      {
+        "field": "description",
+        "status": "transformed",
+        "detail": "missing; used the first body line, as Claude Code does"
+      },
+      {
+        "field": "body",
+        "status": "transformed",
+        "detail": "Antigravity does not substitute $ARGUMENTS; a marked preamble explains it"
+      },
+      {
+        "field": "body",
+        "status": "approximated",
+        "detail": "positional and named arguments are explained, not split, by the target"
+      },
+      {
+        "field": "disable-model-invocation",
+        "status": "transformed",
+        "detail": "converted commands start only when invoked by name, so a workflow never starts from a description match; Claude Code also lets the model start them"
+      }
+    ]
+  }
+]

@@ -28,6 +28,9 @@ func TestReadSkipsLeftovers(t *testing.T) {
 	write(t, filepath.Join(dir, "scripts", "__pycache__", "run.cpython-312.pyc"), 0o644)
 	write(t, filepath.Join(dir, "scripts", "stale.pyc"), 0o644)
 	write(t, filepath.Join(dir, ".DS_Store"), 0o644)
+	write(t, filepath.Join(dir, ".SKILL.md.swp"), 0o644)
+	write(t, filepath.Join(dir, "scripts", ".run.py.swo"), 0o644)
+	write(t, filepath.Join(dir, "SKILL.md~"), 0o644)
 
 	doc, res, notes, err := Read(dir)
 	if err != nil {

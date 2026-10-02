@@ -21,17 +21,18 @@ import (
 )
 
 type convertOptions struct {
-	to, from, out        string
-	print, strict, force bool
+	to, from, out                        string
+	print, strict, force, modelInvocable bool
 }
 
 func newConvertCmd(opts *options) *cobra.Command {
 	c := &convertOptions{}
 	cmd := &cobra.Command{
-		Use:   "convert <skill-dir> --to <harness>",
-		Short: "Convert one skill to another harness (preview unless --out is given)",
-		Long: "Convert one skill directory to another harness and report, field by field, what was\n" +
-			"kept and what was lost. Nothing is written unless --out names a directory.",
+		Use:   "convert <skill-dir | command.md> --to <harness>",
+		Short: "Convert one skill or command to another harness (preview unless --out is given)",
+		Long: "Convert a skill directory or a Claude Code command file to another harness and report,\n" +
+			"field by field, what was kept and what was lost. A command becomes a skill. Nothing is\n" +
+			"written unless --out names a directory.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runConvert(cmd, opts, c, args[0])
@@ -44,24 +45,17 @@ func newConvertCmd(opts *options) *cobra.Command {
 	f.BoolVar(&c.print, "print", false, "print the converted files")
 	f.BoolVar(&c.strict, "strict", false, fmt.Sprintf("exit %d when anything was approximated, dropped or warned about", loss.ExitLossy))
 	f.BoolVar(&c.force, "force", false, "with --out, replace files in an existing skill directory")
+	f.BoolVar(&c.modelInvocable, "model-invocable", false, "let the model start a converted command, as Claude Code does (default: only when invoked by name)")
 	_ = cmd.MarkFlagRequired("to")
 	return cmd
 }
 
 func runConvert(cmd *cobra.Command, opts *options, c *convertOptions, path string) error {
-	dir := path
-	if filepath.Base(dir) == skilldir.Entry {
-		dir = filepath.Dir(dir)
-	}
 	to, err := harness.Parse(c.to)
 	if err != nil {
 		return err
 	}
-	from, err := sourceHarness(c.from, dir)
-	if err != nil {
-		return err
-	}
-	item, err := convert.ReadSkill(from, dir)
+	item, err := readItem(c.from, path)
 	if err != nil {
 		return err
 	}
@@ -88,7 +82,7 @@ func runConvert(cmd *cobra.Command, opts *options, c *convertOptions, path strin
 		}
 	}
 
-	res, err := convert.Skill(item, to)
+	res, err := convert.Skill(item, to, convert.Options{ModelInvocableCommands: c.modelInvocable})
 	if err != nil {
 		return err
 	}
@@ -132,6 +126,60 @@ func leftInPlace(dir string, written []ir.Resource) []string {
 		return nil
 	})
 	return extra
+}
+
+// readItem reads the skill at path, a skill directory or its SKILL.md, or the command file at path.
+func readItem(from, path string) (*ir.Item, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() || filepath.Base(path) == skilldir.Entry {
+		dir := path
+		if !info.IsDir() {
+			dir = filepath.Dir(path)
+		}
+		h, err := sourceHarness(from, dir)
+		if err != nil {
+			return nil, err
+		}
+		return convert.ReadSkill(h, dir)
+	}
+	if filepath.Ext(path) != ".md" {
+		return nil, fmt.Errorf("%s is neither a skill directory nor a command file", path)
+	}
+	return readCommand(from, path)
+}
+
+// readCommand reads a command file, refusing one that convert.CommandBlocked blocks. A command
+// found outside every commands directory is named after its file and has nothing to collide with.
+func readCommand(from, path string) (*ir.Item, error) {
+	home, _ := os.UserHomeDir()
+	dirs, rel, detectErr := convert.DetectCommand(path, home)
+	h := dirs.Harness
+	if from != "auto" {
+		var err error
+		if h, err = harness.Parse(from); err != nil {
+			return nil, err
+		}
+	} else if detectErr != nil {
+		return nil, detectErr
+	}
+	item, err := convert.ReadCommand(h, path, rel)
+	if err != nil {
+		return nil, err
+	}
+	if detectErr != nil {
+		return item, nil
+	}
+	why, err := convert.CommandBlocked(dirs, rel)
+	if err != nil {
+		return nil, fmt.Errorf("%s: check name collisions: %w", path, err)
+	}
+	if why != "" {
+		return nil, fmt.Errorf("%s is not converted: %s", path, why)
+	}
+	return item, nil
 }
 
 func sourceHarness(flag, dir string) (harness.ID, error) {

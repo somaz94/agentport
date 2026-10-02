@@ -1,0 +1,53 @@
+== SKILL.md (0644)
+---
+name: deploy
+description: 'Deploy the current branch: build, push, verify. Use when the user asks to ship.'
+disable-model-invocation: true
+---
+<!-- agentport:args:begin -->
+> **Arguments**: invoked as `/deploy <env> [--dry-run]`. The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text.
+<!-- agentport:args:end -->
+
+# Deploy
+
+Deploy the current branch to $ARGUMENTS.
+
+1. Build the image.
+2. Push it and wait for the rollout.
+== loss report
+[
+  {
+    "source": "Claude Code command deploy",
+    "target": "Antigravity skill deploy",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "allowed-tools",
+        "status": "dropped",
+        "detail": "Antigravity has no counterpart"
+      },
+      {
+        "field": "body",
+        "status": "transformed",
+        "detail": "Antigravity does not substitute $ARGUMENTS; a marked preamble explains it"
+      },
+      {
+        "field": "argument-hint",
+        "status": "transformed",
+        "detail": "moved into the arguments preamble"
+      },
+      {
+        "field": "disable-model-invocation",
+        "status": "transformed",
+        "detail": "converted commands start only when invoked by name, so a workflow never starts from a description match; Claude Code also lets the model start them"
+      }
+    ]
+  }
+]

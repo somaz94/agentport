@@ -51,8 +51,8 @@ func ReadSkill(dir string) (*ir.Item, error) {
 	return item, nil
 }
 
-// WriteSkill renders item as a Codex skill directory.
-func WriteSkill(item *ir.Item) ([]ir.Resource, loss.Report, error) {
+// WriteSkill renders item as a Codex skill directory; a command becomes a skill.
+func WriteSkill(item *ir.Item, opts common.Options) ([]ir.Resource, loss.Report, error) {
 	var r loss.Report
 	if len(item.Name) > maxName {
 		return nil, r, fmt.Errorf("skill name %q is longer than Codex's %d-character limit", item.Name, maxName)
@@ -74,7 +74,8 @@ func WriteSkill(item *ir.Item) ([]ir.Resource, loss.Report, error) {
 	}
 
 	res := common.Resources(item, target, &r)
-	implicit := item.Invocation.ModelInvocable
+	userOnly := common.UserOnly(item, opts)
+	implicit := item.Invocation.ModelInvocable && !userOnly
 	if item.Source.Harness != harness.Codex && implicit && sidecarDisallows(res) {
 		implicit = false
 		r.Add("policy.allow_implicit_invocation", loss.Warn,
@@ -88,6 +89,8 @@ func WriteSkill(item *ir.Item) ([]ir.Resource, loss.Report, error) {
 	case implicit:
 	case item.Source.Harness == harness.Codex:
 		r.Add("policy.allow_implicit_invocation", loss.Mapped, "")
+	case userOnly:
+		r.Add("disable-model-invocation", loss.Transformed, "became policy.allow_implicit_invocation: false in "+common.CodexSidecar+"; "+common.UserOnlyDetail)
 	case !item.Invocation.ModelInvocable:
 		r.Add("disable-model-invocation", loss.Transformed, "became policy.allow_implicit_invocation: false in "+common.CodexSidecar)
 	}

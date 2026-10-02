@@ -1,0 +1,48 @@
+== SKILL.md (0644)
+---
+name: review
+description: 'Review the staged diff'
+disable-model-invocation: true
+model: haiku
+when_to_use: 'Before committing.'
+---
+Review the staged diff and report problems by severity.
+== loss report
+[
+  {
+    "source": "Claude Code command review",
+    "target": "Claude Code skill review",
+    "entries": [
+      {
+        "field": "name",
+        "status": "mapped"
+      },
+      {
+        "field": "description",
+        "status": "mapped"
+      },
+      {
+        "field": "disable-model-invocation",
+        "status": "mapped"
+      },
+      {
+        "field": "model",
+        "status": "mapped"
+      },
+      {
+        "field": "when_to_use",
+        "status": "mapped"
+      },
+      {
+        "field": "name",
+        "status": "warn",
+        "detail": "Claude Code ignores it in a command; not carried over"
+      },
+      {
+        "field": "paths",
+        "status": "warn",
+        "detail": "Claude Code ignores it in a command; not carried over"
+      }
+    ]
+  }
+]

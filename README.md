@@ -25,10 +25,11 @@ agentport converts with these rules, reports per field what was **mapped**, **tr
 
 ```bash
 agentport map                 # what each harness calls a customization, and where it lives
-agentport scan                # what is installed for each harness, and how portable each skill is
+agentport scan                # what is installed for each harness, and how portable each skill and command is
 agentport convert ~/.claude/skills/my-skill --to antigravity            # preview + loss report
 agentport convert ~/.claude/skills/my-skill --to codex --out ./out      # write the converted skill
 agentport convert ~/.claude/skills/my-skill --to codex --strict         # exit 2 if anything is lost
+agentport convert ~/.claude/commands/my-command.md --to codex           # a command becomes a skill
 ```
 
 Every command takes `-o json`.
