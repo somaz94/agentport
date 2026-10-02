@@ -11,7 +11,7 @@ make build        # ./bin/agentport
 make test         # go test ./... -v -race -cover
 make cover-check  # coverage gate over cmd/cli and internal
 make golden       # rewrite golden files from current output, then review the diff
-make ci           # everything CI runs: fmt-check, vet, test, cover-check, build
+make ci           # everything CI runs: tidy-check, fmt-check, vet, test, cover-check, build, then runs the binary
 make e2e-antigravity  # load converted fixtures with the Antigravity app's own loader (macOS, app installed)
 ```
 

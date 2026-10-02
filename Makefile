@@ -1,4 +1,4 @@
-.PHONY: build clean test test-unit e2e-antigravity cover cover-html cover-check golden fmt fmt-check vet ci install check-gh branch pr help
+.PHONY: build clean test test-unit e2e-antigravity cover cover-html cover-check golden fmt fmt-check vet tidy-check ci install check-gh branch pr help
 
 APP_NAME=agentport
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -63,7 +63,11 @@ fmt-check: ## Fail when any file is not gofmt-formatted
 vet: ## Run go vet
 	go vet ./...
 
-ci: fmt-check vet test cover-check build ## Run every check CI runs
+tidy-check: ## Fail when go.mod or go.sum is not tidy
+	go mod tidy -diff
+
+ci: tidy-check fmt-check vet test cover-check build ## Run every check CI runs
+	./bin/$(APP_NAME) version
 
 ## Install
 
