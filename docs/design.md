@@ -7,7 +7,7 @@ agentport keeps Claude Code as the hub and translates its customizations into Co
 ## Hub model
 
 - `~/.claude/` (and a project's `.claude/`) is the single source of truth. Targets are generated.
-- A change made in a target can come back through `adopt`, which converts it back and merges it into the hub file while keeping hub-only fields such as `allowed-tools`. A full bidirectional three-way merge is out of scope.
+- A change made in a target can come back through [`adopt`](#adopt), which converts it back and merges it into the hub file while keeping hub-only fields such as `allowed-tools`. A full bidirectional three-way merge is out of scope.
 - Paired translation mirrors (for example an `agents-ko/` beside `agents/`) are converted the same way into the matching target directory, where no harness loads them.
 
 Existing tools were considered first. rulesync supports all three harnesses but moves the source into its own neutral directory, drops unknown fields with at most a warning, copies `tools` and hook matchers without translating them, and still generates targets the harnesses have removed. The built-in importers are one-way and one-shot, and Codex's skips any command that uses `$ARGUMENTS`. What agentport adds is the loss report as the product, semantic translation, the Claude directory as the hub, and ownership tracking.
@@ -21,11 +21,11 @@ Existing tools were considered first. rulesync supports all three harnesses but 
 | `map [kind]` | The crosswalk: what each harness calls a concept and where it lives |
 | `scan` | What exists at each harness location, with a portability grade per item |
 | `convert <path> --to <harness>` | Convert one item in any direction; preview by default |
-| `sync --to <harnesses>` | Convert the whole hub; dry run by default, `--apply` writes, `--check` exits non-zero when anything would change, `--strict` exits 2 on any loss |
-| `status` | Classify every target file (see [Sync safety](#sync-safety)) |
-| `adopt <target-path>` | Bring a target edit back into the hub |
-| `doctor` | Installed versions, the path table, use of deprecated locations |
-| `link skills --to <harness>` | Use hub skills in place without copying (see [Link mode](#link-mode)) |
+| `sync [--to <harnesses>]` | Convert the whole hub into each target; dry run by default, `--apply` writes, `--check` writes nothing and exits 3 when a target is out of sync, `--strict` exits 2 on any loss and writes nothing (see [Sync](#sync)) |
+| `status` | Classify every unit in each target, unmanaged ones included |
+| `adopt <target-path>` | Bring an edit made in a target back into the hub (see [Adopt](#adopt)) |
+| `doctor` | Installed versions against the verified ones, locations, deprecated locations in use, manifest health (see [Doctor](#doctor)) |
+| `link skills --to <harness>` (planned) | Use hub skills in place without copying (see [Link mode](#link-mode)) |
 
 `agentport --help` is authoritative for what a given build implements.
 
@@ -141,7 +141,7 @@ Antigravity reports none of these failures, so the writer checks all of them bef
 - Claude Code tool names distinct enough to find in prose (for example `AskUserQuestion`, `TodoWrite`, `WebFetch`) produce a `warn` when a body leaves Claude Code, naming the target's counterpart or saying it has none. Names that are also plain words, such as `Read` or `Edit`, are not checked.
 - `convert` checks the agent names a body mentions against the agents the target already has at the user scope, taking the source harness's user-scope agents as the names to look for. A mentioned agent the target lacks is a `warn` that suggests converting it too.
 - `scan` checks tool names but not agent references: it grades portability, not what each harness has installed.
-- Paths under `~/.claude/` are not rewritten by default; on the same machine they still resolve. A `rewrite` rule in the config enables substitution.
+- Paths under `~/.claude/` are not rewritten; on the same machine they still resolve. Antigravity asks before a subagent reads a file outside the conversation's workspace ([spec/antigravity.md](spec/antigravity.md#tool-names)), so there such a path waits for the user's approval and fails when nobody gives it.
 
 <br/>
 
@@ -153,31 +153,83 @@ Antigravity reports none of these failures, so the writer checks all of them bef
 
 <br/>
 
-## Sync safety
+## Sync
 
-- Dry run by default; `--apply` writes.
-- Each target root has `.agentport/manifest.json` recording, per written file, its source, the source hash, the output hash and the generator version.
-- Every target path is classified: `new`, `update` (source changed, target untouched), `unchanged`, `drift` (edited by hand — skipped and reported until `adopt` or `--force`), `orphan` (source gone and target untouched — deleted), `conflict` (an unmanaged file is in the way), `unmanaged` (never touched).
-- No directory is removed wholesale and nothing is synced with a delete flag; only unedited manifest entries are deleted.
-- Two runs on the same input produce no change the second time. Tests enforce it.
+`sync` converts every skill, command and agent in the hub into each target harness at the user scope. The project scope is not synced: Codex and Antigravity both read a project's `.agents/skills`, so their outputs would collide there.
+
+- Dry run by default; `--apply` writes. Without `--to` or configured targets, every harness whose configuration directory (from the location table) exists is a target. A target named but not set up is refused rather than created; so is a target directory that is a link to nothing, or that resolves to the same place as a hub directory or another target's, through a link in either direction.
+- Each target keeps `.agentport/manifest.json` in its configuration directory. For every file it tracks it records the hub item the file came from and fingerprints of both, the output's content and mode included (`manifest.Entry` in `internal/manifest`). Paths are relative to the home directory, because one harness can keep skills and agents in different trees.
+- Every target file is classified by comparing what the manifest recorded, what the hub converts to now, and what is on disk, content and mode together:
+  - `new`, `update` (what the hub converts to changed, the file did not) and `unchanged`.
+  - `orphan`: its source is gone and the file is as written, so it is deleted.
+  - `drift`: edited since it was written, so it is kept and reported until `adopt` or `--force`.
+  - `conflict`: a file the manifest does not record is in the way, and is never touched.
+  - `unmanaged`: anything else in the target's directories, never touched.
+
+  A file that already holds exactly what the conversion produces is recorded, whoever wrote it, and is agentport's from then on: updated, and deleted as an orphan, like any file it wrote.
+- A unit (a skill directory or an agent file) is a conflict as a whole, so nothing of it is written:
+  - when its `SKILL.md` or agent file is someone else's, which keeps a hand-ported skill whole, bundled files included;
+  - when it is a symbolic link, since agentport never writes through one;
+  - when another unit in the target, not written by agentport, has the same name, since the target identifies skills and agents by name and loads only one;
+  - when its path differs from another unit's only in letter case, which the default macOS and Windows file systems treat as one path; neither unit is written.
+- Hub items are listed and checked as the hub harness loads them (see [Command → skill](#command--skill) and [Reading agents](#reading-agents)). An item reported `skipped` (a name collision, or a target that already reads it through a link) or `error` (unreadable, or failed to convert) keeps its earlier output as it is, together with anything else recorded at its target path. So does every item under a hub directory that could not be listed in full or is a link to nothing, since an item missing from it may only be unreadable; while a skill cannot be read, no command beside it is converted, since the skill's name is unknown.
+- A `skip` pattern leaves an item out, and its earlier output becomes an orphan. It does not change which item wins a name.
+- `--force` replaces drifted files. A drifted file whose source is gone is not deleted; agentport stops tracking it.
+- Writes come before deletions, and both go through an `os.Root` opened on the target directory, so neither follows a link out of it; one whose path resolves into the hub is refused, whatever the plan said. The manifest records what was written even when a later file fails. A directory is removed only when deleting its orphans left it empty.
+- Two runs on the same input produce no change the second time, and a file the manifest does not record is never changed or deleted. Tests enforce both.
+
+<br/>
+
+## Adopt
+
+`adopt <target-path>` brings an edit made in a target back into the hub item it was converted from. The path is a skill directory, a file in one, or an agent file; the manifest names the hub item.
+
+- The hub must still convert to what the manifest recorded writing. Otherwise the conversion changed since (the hub, the settings or agentport itself), and adopting the target as it is would undo that change. The manifest keeps hashes, not the earlier content, so there is no base for a three-way merge. `--force` adopts anyway, unless the hub item was renamed, and the preview shows what it undoes.
+- What is adopted is the difference between the edited unit and what the hub converts to now, both read with the target's reader:
+  - `description` and the body, without the arguments preamble, and the `argument-hint` recovered from it.
+  - For a skill, the invocation flags and the portable keys (`license`, `compatibility`, `metadata`). Whether the model may start a converted command is a sync setting, not part of the command, so it is not adopted.
+  - For an agent, the capabilities removed from or added to the tools Antigravity lists, applied to the hub's `tools` with every other entry, specifiers included, kept as written; an agent that had every tool gets the removed ones in `disallowedTools`. Codex `model_reasoning_effort` becomes `effort`, and Antigravity `preloadSkills` becomes `skills`.
+  - Bundled files, when the hub item is a skill, copied back byte for byte with their modes, except below a link the hub reader does not follow. A file added beside a converted command or agent is listed, not adopted, and a file deleted in the target is reported, not deleted from the hub.
+- What the hub cannot hold is left out and listed under `not adopted` in the preview: for example a rename, a model from another harness, or a key only the target has.
+- A change to the body alone keeps the hub file's frontmatter byte for byte; any other change rewrites the frontmatter as strict YAML.
+- Preview by default, as a diff of each hub file; `--apply` writes. The hub's new conversion then becomes what the manifest compares the unit with. A unit that still differs from it, because the hub could not hold an edit or only formatting differs, stays `drift` until `sync --force` rewrites it.
+
+<br/>
+
+## Doctor
+
+`doctor` reports, at the user or project scope:
+
+- The settings file: whether it loads.
+- Each harness's installed version, read from `claude --version` and `codex --version` on `PATH` and from the Antigravity app bundle on macOS, against the version its facts in [spec/](spec/) were verified on.
+- Where each harness keeps skills, commands and agents, and whether it is set up.
+- Locations a harness deprecated or removed that still hold files, from the location table.
+- At the user scope, each target manifest: whether it loads, and recorded files that are missing.
+- At the user scope, an Antigravity configuration directory holding both `AGENTS.md` and `GEMINI.md`, which Antigravity loads both of.
+
+A check that fails, such as a settings file or manifest that does not parse, exits 1; a warning does not.
 
 <br/>
 
 ## Configuration
 
-`$XDG_CONFIG_HOME/agentport/config.yaml`, all keys optional:
+`$XDG_CONFIG_HOME/agentport/config.yaml` (`~/.config/agentport/config.yaml` when the variable is unset), or the file `--config` names. Every key is optional, and an unknown key is an error:
 
 ```yaml
-hub: claude
-targets: [antigravity, codex]
-scope: user
-exclude: ['*-private', 'scratch-*']   # project directories never synced
-excludeOssForks: true                 # skip repositories that have an `upstream` remote
-pairs: {agents: agents-ko, commands: commands-ko, skills: skills-ko}
-skip: ['skills/synced/**']
-rewrite: []                           # e.g. {from: '~/.claude/CLAUDE.md', to: '~/.gemini/config/AGENTS.md'}
-modelMap: {}                          # e.g. {opus: pro, haiku: flash}
+hub: claude                      # must be claude
+targets: [antigravity, codex]    # what sync and status use without --to; default: every harness set up
+pairs: ['-ko']                   # translation mirrors: skills-ko/, commands-ko/, agents-ko/ beside the hub's directories
+skip: ['commands/internal', 'agents/*-draft.md']   # hub items left out, relative to the hub directory
+modelInvocableCommands: false    # let the model start converted commands, as Claude Code does
 ```
+
+`targets`, `pairs` and `skip` above are examples; `hub` and `modelInvocableCommands` show the defaults.
+
+- A pair directory is converted the same way into the matching directory of each target (`skills-ko/`, `agents-ko/`), which no harness loads. Removing a pair makes its earlier output orphans.
+- `skip` patterns use Go's `path.Match` syntax, where `*` does not cross `/`; a pattern that matches a directory skips everything below it.
+- `modelInvocableCommands` is what `convert --model-invocable` sets for one conversion. `sync` takes no flag for it, so `adopt` converts with the setting `sync` used.
+
+Syncing the project scope will need repositories to exclude, path rewriting in bodies and a model map; none of them is a key yet.
 
 <br/>
 

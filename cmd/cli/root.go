@@ -25,8 +25,8 @@ func NewRootCmd() *cobra.Command {
 		Use:   "agentport",
 		Short: "Port Claude Code skills, commands and agents to Codex and Antigravity",
 		Long: "agentport translates Claude Code customizations into Codex and Antigravity formats,\n" +
-			"reports field by field what each conversion kept and lost, and never touches a file it\n" +
-			"did not write.",
+			"reports field by field what each conversion kept and lost, and never changes or deletes a\n" +
+			"file it does not track.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -37,6 +37,6 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 	root.PersistentFlags().StringVarP(&opts.output, "output", "o", outputText, "output format: text or json")
-	root.AddCommand(newVersionCmd(opts), newMapCmd(opts), newConvertCmd(opts), newScanCmd(opts))
+	root.AddCommand(newVersionCmd(opts), newMapCmd(opts), newConvertCmd(opts), newScanCmd(opts), newSyncCmd(opts), newStatusCmd(opts), newAdoptCmd(opts), newDoctorCmd(opts))
 	return root
 }

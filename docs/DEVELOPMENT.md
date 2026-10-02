@@ -47,6 +47,12 @@ Every row in `docs/spec/` names its evidence. To re-verify Antigravity, run its 
 
 <br/>
 
+## Trying sync on your own hub
+
+Point `--root` at a scratch home whose `.claude` links to your real one, and create an empty configuration directory there for each target (`agentport doctor --root <scratch>` names any that is missing). `sync` then reads your hub through the link and writes only under the scratch directory. `adopt --apply` writes to the hub, so with this setup it writes through the link into your real `~/.claude`.
+
+<br/>
+
 ## Workflow
 
 ```bash

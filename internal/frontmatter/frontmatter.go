@@ -294,3 +294,26 @@ func singleQuotable(s string) bool {
 	}
 	return true
 }
+
+// ReplaceBody returns data with its body replaced and its frontmatter kept byte for byte. It
+// returns false when it cannot splice that way (a BOM, CRLF line endings, or no closing
+// delimiter), so the caller can fall back to Marshal.
+func ReplaceBody(data []byte, body string) ([]byte, bool) {
+	text := string(data)
+	if strings.HasPrefix(text, "\uFEFF") || strings.Contains(text, "\r\n") {
+		return nil, false
+	}
+	open := delimiter + "\n"
+	if !strings.HasPrefix(text, open) {
+		return []byte(body), true
+	}
+	rest := text[len(open):]
+	if strings.HasPrefix(rest, open) {
+		return []byte(text[:2*len(open)] + body), true
+	}
+	end := strings.Index(rest, "\n"+open)
+	if end < 0 {
+		return nil, false
+	}
+	return []byte(text[:len(open)+end+1+len(open)] + body), true
+}

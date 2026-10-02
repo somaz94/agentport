@@ -13,6 +13,7 @@ import (
 
 	"github.com/somaz94/agentport/internal/frontmatter"
 	"github.com/somaz94/agentport/internal/ir"
+	"github.com/somaz94/agentport/internal/safefs"
 )
 
 // Entry is the instruction file every harness looks for in a skill directory.
@@ -50,7 +51,7 @@ func Read(dir string) (*frontmatter.Document, []ir.Resource, []ir.Note, error) {
 		switch {
 		case d.IsDir() && d.Name() == "__pycache__":
 			return filepath.SkipDir
-		case d.IsDir(), rel == Entry, leftover(d.Name()):
+		case d.IsDir(), rel == Entry, Leftover(d.Name()):
 			return nil
 		}
 		info, err := os.Stat(p)
@@ -82,8 +83,10 @@ func Read(dir string) (*frontmatter.Document, []ir.Resource, []ir.Note, error) {
 	return doc, res, notes, nil
 }
 
-func leftover(name string) bool {
-	if name == ".DS_Store" || strings.HasSuffix(name, "~") {
+// Leftover reports whether name is a file no skill means to bundle: a Python cache, an editor swap
+// or backup file, .DS_Store, or a temporary file agentport writes on the way to the real one.
+func Leftover(name string) bool {
+	if name == ".DS_Store" || strings.HasSuffix(name, "~") || strings.HasSuffix(name, ".agentport-tmp") {
 		return true
 	}
 	switch path.Ext(name) {
@@ -129,42 +132,11 @@ func Write(dir string, files []ir.Resource) error {
 	}
 	defer root.Close()
 	for _, f := range files {
-		if err := writeFile(root, filepath.FromSlash(f.Path), f); err != nil {
+		if err := safefs.WriteFile(root, filepath.FromSlash(f.Path), f.Data, f.Mode); err != nil {
 			return fmt.Errorf("write %s: %w", filepath.Join(dir, f.Path), err)
 		}
 	}
 	return nil
-}
-
-func writeFile(root *os.Root, name string, f ir.Resource) error {
-	if parent := filepath.Dir(name); parent != "." {
-		if err := root.MkdirAll(parent, 0o755); err != nil {
-			return err
-		}
-	}
-	mode := f.Mode
-	if mode == 0 {
-		mode = 0o644
-	}
-	tmp := name + ".agentport-tmp"
-	w, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return err
-	}
-	if _, err := w.Write(f.Data); err != nil {
-		w.Close()
-		_ = root.Remove(tmp)
-		return err
-	}
-	if err := w.Close(); err != nil {
-		_ = root.Remove(tmp)
-		return err
-	}
-	if err := root.Chmod(tmp, mode); err != nil {
-		_ = root.Remove(tmp)
-		return err
-	}
-	return root.Rename(tmp, name)
 }
 
 // FirstLine returns the first non-empty line of body without heading markers. Claude Code falls back

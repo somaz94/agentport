@@ -285,3 +285,23 @@ func TestMarshalDescriptionFallback(t *testing.T) {
 		}
 	}
 }
+
+func TestReplaceBody(t *testing.T) {
+	cases := []struct {
+		in, body, want string
+		ok             bool
+	}{
+		{"---\nname: a  # keep\n---\nold\n", "new\n", "---\nname: a  # keep\n---\nnew\n", true},
+		{"---\n---\nold\n", "new\n", "---\n---\nnew\n", true},
+		{"no frontmatter\n", "new\n", "new\n", true},
+		{"---\r\nname: a\r\n---\r\nold\r\n", "new\n", "", false},
+		{"\uFEFF---\nname: a\n---\nold\n", "new\n", "", false},
+		{"---\nname: a\n", "new\n", "", false},
+	}
+	for _, c := range cases {
+		got, ok := ReplaceBody([]byte(c.in), c.body)
+		if ok != c.ok || string(got) != c.want {
+			t.Errorf("ReplaceBody(%q) = %q, %v; want %q, %v", c.in, got, ok, c.want, c.ok)
+		}
+	}
+}

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/somaz94/agentport/internal/harness"
@@ -46,7 +45,18 @@ type Layout struct {
 	// User paths are relative to the home directory, project paths to the repository root.
 	// `<name>` is replaced with the item name.
 	user, project map[ir.Kind]string
-	deprecated    []string
+	// roots are the harness's own configuration directory at each scope.
+	roots  map[Scope]string
+	legacy []Legacy
+}
+
+// Legacy is a location the harness reads, or used to read, that agentport never writes.
+type Legacy struct {
+	Scope Scope
+	// Path is relative to the scope's root.
+	Path string
+	// Note says what became of the location.
+	Note string
 }
 
 var layouts = map[harness.ID]Layout{
@@ -65,6 +75,7 @@ var layouts = map[harness.ID]Layout{
 			ir.KindAgent:        ".claude/agents/<name>.md",
 			ir.KindInstructions: "CLAUDE.md",
 		},
+		roots: map[Scope]string{ScopeUser: ".claude", ScopeProject: ".claude"},
 	},
 	harness.Codex: {
 		Harness: harness.Codex,
@@ -79,7 +90,11 @@ var layouts = map[harness.ID]Layout{
 			ir.KindAgent:        ".codex/agents/<name>.toml",
 			ir.KindInstructions: "AGENTS.md",
 		},
-		deprecated: []string{"~/.codex/skills", "~/.codex/prompts"},
+		roots: map[Scope]string{ScopeUser: ".codex", ScopeProject: ".codex"},
+		legacy: []Legacy{
+			{ScopeUser, ".codex/skills", "deprecated: Codex still loads skills here, but ~/.agents/skills replaces it"},
+			{ScopeUser, ".codex/prompts", "removed in rust-v0.118.0: Codex no longer reads custom prompts"},
+		},
 	},
 	harness.Antigravity: {
 		Harness: harness.Antigravity,
@@ -94,8 +109,24 @@ var layouts = map[harness.ID]Layout{
 			ir.KindAgent:        ".agents/agents/<name>.md",
 			ir.KindInstructions: "AGENTS.md",
 		},
-		deprecated: []string{".agent/", ".agents/workflows/", "~/.gemini/antigravity/skills"},
+		roots:  map[Scope]string{ScopeUser: ".gemini/config", ScopeProject: ".agents"},
+		legacy: antigravityLegacy(),
 	},
+}
+
+// antigravityLegacy lists the workflow locations Antigravity's bundled migrate-workflows skill
+// retires in favour of skills.
+func antigravityLegacy() []Legacy {
+	const note = "deprecated: Antigravity workflows are replaced by skills"
+	out := []Legacy{
+		{ScopeUser, ".gemini/config/global_workflows", note},
+		{ScopeUser, ".gemini/config/workflows", note},
+		{ScopeUser, ".gemini/config/workflows.json", note},
+	}
+	for _, dir := range []string{".agents", "_agents", ".agent", "_agent"} {
+		out = append(out, Legacy{ScopeProject, dir + "/workflows", note}, Legacy{ScopeProject, dir + "/workflows.json", note})
+	}
+	return out
 }
 
 // For returns the layout of h.
@@ -164,10 +195,26 @@ func (l Layout) Supports(scope Scope, kind ir.Kind) bool {
 	return ok
 }
 
-// Deprecated lists locations the harness still reads or used to read, for the planned `doctor` check.
-// Entries starting with `~/` are user scope, the rest project scope.
-func (l Layout) Deprecated() []string {
-	return slices.Clone(l.deprecated)
+// Root returns the harness's own configuration directory at scope, relative to the scope's root:
+// `.gemini/config` for Antigravity's user scope. A harness whose root is missing is not set up there.
+func (l Layout) Root(scope Scope) (string, error) {
+	r, ok := l.roots[scope]
+	if !ok {
+		return "", fmt.Errorf("unknown scope %q", scope)
+	}
+	return filepath.FromSlash(r), nil
+}
+
+// Legacy lists the deprecated or removed locations of the harness at scope.
+func (l Layout) Legacy(scope Scope) []Legacy {
+	var out []Legacy
+	for _, x := range l.legacy {
+		if x.Scope == scope {
+			x.Path = filepath.FromSlash(x.Path)
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 func (l Layout) table(scope Scope) (map[ir.Kind]string, error) {

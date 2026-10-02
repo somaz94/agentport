@@ -162,6 +162,7 @@ func scan(s *scanOptions) ([]Entry, []string, error) {
 		switch e.Kind {
 		case ir.KindSkill:
 			item, err := convert.ReadSkill(convert.Owner(p, e.Harnesses), p)
+			e.Name = loadedName(item, err, e.Name)
 			e.Targets = convertTargets(item, err, e.Harnesses)
 		case ir.KindCommand:
 			h := e.Harnesses[0]
@@ -181,11 +182,21 @@ func scan(s *scanOptions) ([]Entry, []string, error) {
 				break
 			}
 			item, err := convert.ReadAgent(h, p)
+			e.Name = loadedName(item, err, e.Name)
 			e.Targets = convertTargets(item, err, e.Harnesses)
 		}
 		entries = append(entries, *e)
 	}
 	return entries, warnings, nil
+}
+
+// loadedName is the name a skill or agent loads under, which its frontmatter sets; the file or
+// directory name stands in when the item cannot be read.
+func loadedName(item *ir.Item, err error, fallback string) string {
+	if err != nil {
+		return fallback
+	}
+	return item.Name
 }
 
 func scopeRoot(scope paths.Scope, root string) (string, error) {

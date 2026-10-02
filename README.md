@@ -31,9 +31,14 @@ agentport convert ~/.claude/skills/my-skill --to codex --out ./out      # write 
 agentport convert ~/.claude/skills/my-skill --to codex --strict         # exit 2 if anything is lost
 agentport convert ~/.claude/commands/my-command.md --to codex           # a command becomes a skill
 agentport convert ~/.claude/agents/my-agent.md --to antigravity         # an agent stays an agent
+agentport sync                # preview converting the whole hub into every target
+agentport sync --apply        # write it: files someone edited, and files agentport does not track, are left alone
+agentport status              # classify every unit in each target against the hub and the manifest
+agentport adopt ~/.gemini/config/skills/my-skill   # bring an edit made in a target back into the hub
+agentport doctor              # installed versions, locations, deprecated paths, manifests
 ```
 
-Every command takes `-o json`.
+Every command takes `-o json`. Settings such as the target harnesses and translation mirrors like `skills-ko/` come from a config file; see [Configuration](docs/design.md#configuration).
 
 `agentport --help` lists the commands available in the build you have.
 

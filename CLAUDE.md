@@ -1,6 +1,6 @@
 # CLAUDE.md — agentport
 
-agentport translates Claude Code skills, commands and agents into Codex and Antigravity formats, reports field by field what each conversion kept and lost, and never touches a file it did not write. Design: [docs/design.md](docs/design.md). Harness facts: [docs/spec/](docs/spec/).
+agentport translates Claude Code skills, commands and agents into Codex and Antigravity formats, reports field by field what each conversion kept and lost, and never changes or deletes a file it does not track. Design: [docs/design.md](docs/design.md). Harness facts: [docs/spec/](docs/spec/).
 
 <br/>
 
@@ -22,6 +22,7 @@ make e2e-antigravity  # load converted fixtures with the Antigravity app's own l
 - **Harness facts come from `docs/spec/`, not memory.** Each spec file pins the harness version it was verified against and marks every row with its evidence. When code needs a fact the spec lacks, verify it against that version first and add the row; do not mix rows from two versions in one file.
 - **Locations come from `internal/paths` only.** No other package hard-codes a harness directory.
 - **Writers emit strict YAML; readers accept what the harness accepts.** Claude Code and Codex repair invalid frontmatter before parsing, Antigravity silently drops an agent whose frontmatter does not parse. `internal/frontmatter` does both halves; do not hand-roll YAML elsewhere.
+- **`sync` changes or deletes only files its manifest records**, and without `--force` only while they are still as written. A file agentport did not write enters the manifest only when it already holds exactly agentport's output. Every write and deletion goes through `internal/reconcile` and an `os.Root`. Keep `TestSecondSyncChangesNothing` and `TestUnmanagedFilesAreNeverTouched` passing.
 - **Antigravity fails silently.** A missing `name` / `description`, a comma-string `tools`, an unknown `model` or an unknown tool name each drops or breaks the agent without an error. Every writer validates before it writes. Run `make e2e-antigravity` after changing an Antigravity writer.
 - **Fixtures are synthetic.** Never copy a real `~/.claude`, `~/.codex` or `~/.gemini` file into `testdata/`; personal paths and account names leak through fixtures more than through any other file.
 - **Golden files are reviewed, not regenerated blindly.** `make golden` rewrites them; read the diff before committing.

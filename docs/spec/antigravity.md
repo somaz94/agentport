@@ -24,8 +24,9 @@ Where the bundled docs and a probe disagree, the probe wins and the row says so.
 | Rule | `~/.gemini/config/rules/*.md` | `.agents/rules/*.md` | probe (global) |
 | Always-on instructions | `~/.gemini/config/AGENTS.md`, `~/.gemini/config/GEMINI.md` | `AGENTS.md` / `GEMINI.md` in each directory up to repo root | probe (global), docs (workspace) |
 | External skill roots | `~/.gemini/config/skills.json` | `.agents/skills.json` | probe (global) |
+| Workflow (deprecated) | `~/.gemini/config/global_workflows/*.md`, `~/.gemini/config/workflows/*.md`, `~/.gemini/config/workflows.json` | `.agents/workflows/*.md` (also `_agents/`, `.agent/`, `_agent/`), and `workflows.json` in each | docs |
 
-All four kinds are hot-reloaded; no restart is needed after a write (probe).
+Skills, agents, rules and always-on instructions are hot-reloaded; no restart is needed after a write (probe). Workflows are deprecated in favour of skills; the bundled `migrate-workflows` skill moves them (docs).
 
 <br/>
 
@@ -88,6 +89,8 @@ Every name below was offered to a subagent that listed it, in a real 2.19.1 conv
 | Message another agent | `send_message` | Always added |
 
 The main agent of a 2.19.1 conversation is offered a different set: `run_command`, `manage_task`, `view_file`, `write_to_file`, `replace_file_content`, `read_url_content`, `search_web`, `ask_question`, `invoke_subagent`, `define_subagent`, `manage_subagents`, `schedule`, `send_message`, `generate_image`. It has no `grep_search`, `find_by_name` or `list_dir` and searches through `run_command` (runtime).
+
+A subagent asks the user before reading a file outside the conversation's workspace: `view_file` on such a path raised a permission prompt for `read_file`, and with no answer the call failed with `permission check failed for read_file … timed out waiting` (runtime).
 
 <br/>
 

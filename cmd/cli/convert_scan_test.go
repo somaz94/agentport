@@ -317,7 +317,8 @@ func TestScanSymlinksPermissionsAndSharedOwners(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout.String(), "linked-skill") || !strings.Contains(stdout.String(), "ok") {
+	// A skill is listed under its frontmatter name, not the name of the link to it.
+	if !strings.Contains(stdout.String(), "skill  demo-skill") || !strings.Contains(stdout.String(), "agent  ok") {
 		t.Errorf("a symlinked skill or a readable agent is missing:\n%s", stdout.String())
 	}
 	if os.Geteuid() != 0 && !strings.Contains(stderr.String(), "warning:") {

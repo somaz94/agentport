@@ -297,3 +297,81 @@ func writeTools(doc *frontmatter.Document, item *ir.Item, r *loss.Report) {
 		r.Addf("tools", loss.Dropped, "no Claude Code counterpart: %s", strings.Join(t.Unknown, ", "))
 	}
 }
+
+// AdoptTools edits the frontmatter of a Claude Code agent so it no longer grants the capabilities
+// in removed and grants those in added, keeping every other entry, specifiers included, as written.
+// An agent that may use every tool keeps that, with the removed tools in disallowedTools. It
+// returns false, changing nothing, when the agent would be left with no tool at all.
+func AdoptTools(doc *frontmatter.Document, removed, added []ir.Capability) bool {
+	tools, listed := doc.Get("tools")
+	denied, _ := doc.Get("disallowedTools")
+	var was []string
+	if denied != nil {
+		was = entries(denied)
+	}
+	deny := slices.Clone(was)
+	newTools := tools
+	if listed && !slices.Contains(entries(tools), "*") {
+		var kept []string
+		for _, e := range entries(tools) {
+			if !grantsAny([]string{e}, removed) {
+				kept = append(kept, e)
+			}
+		}
+		for _, c := range added {
+			if !grantsAny(kept, []ir.Capability{c}) {
+				kept = append(kept, capTools[c])
+			}
+		}
+		newTools = entriesNode(tools, kept)
+	} else {
+		for _, name := range append(slices.Clone(everyTool), "PowerShell") {
+			if slices.Contains(removed, toolCaps[name]) && !slices.Contains(deny, name) {
+				deny = append(deny, name)
+			}
+		}
+	}
+	// A capability granted again is no longer denied.
+	deny = slices.DeleteFunc(deny, func(e string) bool { return grantsAny([]string{e}, added) })
+	var newDenied *yaml.Node
+	if len(deny) > 0 {
+		newDenied = entriesNode(denied, deny)
+	}
+	if t := toolSet(newTools, newDenied); !t.All && len(t.Caps) == 0 {
+		return false
+	}
+	if newTools != tools {
+		doc.Set("tools", newTools)
+	}
+	switch {
+	case newDenied == nil:
+		doc.Delete("disallowedTools")
+	case !slices.Equal(deny, was):
+		doc.Set("disallowedTools", newDenied)
+	}
+	return true
+}
+
+// grantsAny reports whether an entry names a tool with one of caps.
+func grantsAny(list []string, caps []ir.Capability) bool {
+	for _, e := range list {
+		name, _ := splitEntry(e)
+		if c, ok := toolCaps[canonical(name)]; ok && slices.Contains(caps, c) {
+			return true
+		}
+	}
+	return false
+}
+
+// entriesNode holds values in the form the key already had: a list stays a list, and anything else
+// becomes the comma-separated string Claude Code agents usually carry.
+func entriesNode(was *yaml.Node, values []string) *yaml.Node {
+	if was != nil && was.Kind == yaml.SequenceNode {
+		seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		for _, v := range values {
+			seq.Content = append(seq.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v})
+		}
+		return seq
+	}
+	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: strings.Join(values, ", ")}
+}

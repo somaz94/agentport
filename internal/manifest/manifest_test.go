@@ -115,25 +115,40 @@ func TestHash(t *testing.T) {
 	}
 }
 
+func TestFingerprint(t *testing.T) {
+	data := []byte("abc")
+	e := Entry{OutputHash: Hash(data), Mode: Mode(0o755)}
+	if got := Fingerprint(data, 0o755); got != e.Fingerprint() {
+		t.Errorf("Fingerprint = %q; want %q", got, e.Fingerprint())
+	}
+	if Fingerprint(data, 0o644) == Fingerprint(data, 0o755) {
+		t.Error("a mode change leaves the fingerprint unchanged")
+	}
+	if Mode(0o100644) != "0644" {
+		t.Errorf("Mode keeps type bits: %s", Mode(0o100644))
+	}
+}
+
 func TestClassify(t *testing.T) {
-	rec := &Entry{OutputHash: "old"}
+	rec := &Entry{OutputHash: "old", Mode: "0644"}
+	old := rec.Fingerprint()
 	cases := []struct {
 		name string
 		o    Observation
 		want State
 	}{
-		{"unmanaged, no source", Observation{TargetExists: true, TargetHash: "x"}, StateUnmanaged},
-		{"new", Observation{SourceExists: true, OutputHash: "new"}, StateNew},
-		{"unmanaged identical", Observation{SourceExists: true, OutputHash: "new", TargetExists: true, TargetHash: "new"}, StateUnchanged},
-		{"conflict", Observation{SourceExists: true, OutputHash: "new", TargetExists: true, TargetHash: "theirs"}, StateConflict},
-		{"update", Observation{Recorded: rec, SourceExists: true, OutputHash: "new", TargetExists: true, TargetHash: "old"}, StateUpdate},
-		{"unchanged", Observation{Recorded: rec, SourceExists: true, OutputHash: "old", TargetExists: true, TargetHash: "old"}, StateUnchanged},
-		{"drift", Observation{Recorded: rec, SourceExists: true, OutputHash: "new", TargetExists: true, TargetHash: "hand"}, StateDrift},
-		{"hand edit equals new output", Observation{Recorded: rec, SourceExists: true, OutputHash: "new", TargetExists: true, TargetHash: "new"}, StateUnchanged},
-		{"recreate deleted target", Observation{Recorded: rec, SourceExists: true, OutputHash: "new"}, StateNew},
-		{"orphan", Observation{Recorded: rec, TargetExists: true, TargetHash: "old"}, StateOrphan},
+		{"unmanaged, no source", Observation{TargetExists: true, Target: "x"}, StateUnmanaged},
+		{"new", Observation{SourceExists: true, Output: "new"}, StateNew},
+		{"unmanaged identical", Observation{SourceExists: true, Output: "new", TargetExists: true, Target: "new"}, StateUnchanged},
+		{"conflict", Observation{SourceExists: true, Output: "new", TargetExists: true, Target: "theirs"}, StateConflict},
+		{"update", Observation{Recorded: rec, SourceExists: true, Output: "new", TargetExists: true, Target: old}, StateUpdate},
+		{"unchanged", Observation{Recorded: rec, SourceExists: true, Output: old, TargetExists: true, Target: old}, StateUnchanged},
+		{"drift", Observation{Recorded: rec, SourceExists: true, Output: "new", TargetExists: true, Target: "hand"}, StateDrift},
+		{"hand edit equals new output", Observation{Recorded: rec, SourceExists: true, Output: "new", TargetExists: true, Target: "new"}, StateUnchanged},
+		{"recreate deleted target", Observation{Recorded: rec, SourceExists: true, Output: "new"}, StateNew},
+		{"orphan", Observation{Recorded: rec, TargetExists: true, Target: old}, StateOrphan},
 		{"orphan already gone", Observation{Recorded: rec}, StateOrphan},
-		{"edited orphan is drift", Observation{Recorded: rec, TargetExists: true, TargetHash: "hand"}, StateDrift},
+		{"edited orphan is drift", Observation{Recorded: rec, TargetExists: true, Target: "hand"}, StateDrift},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
