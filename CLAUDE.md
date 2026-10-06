@@ -28,5 +28,5 @@ make e2e-codex        # load converted fixtures with the Codex CLI's app-server 
 - **Codex drops a role it cannot parse with only a startup warning**, an unknown key included. Run `make e2e-codex` after changing a Codex writer.
 - **Fixtures are synthetic.** Never copy a real `~/.claude`, `~/.codex` or `~/.gemini` file into `testdata/`; personal paths and account names leak through fixtures more than through any other file.
 - **Golden files are reviewed, not regenerated blindly.** `make golden` rewrites them; read the diff before committing.
-- **Release automation is not in the repo yet.** Ask before adding `release.yml`, `.goreleaser.yml`, `.github/release.yml` or a changelog workflow.
+- **Releases run on a `vX.Y.Z` tag push:** `release.yml` runs GoReleaser (`.goreleaser.yml`), and `changelog-generator.yml` commits `CHANGELOG.md`. Ask before changing any of these files or `.github/release.yml`.
 - Coverage stays at or above the `COVER_MIN` in the Makefile. Comments are English and explain why, not what.

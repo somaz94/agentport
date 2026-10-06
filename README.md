@@ -24,6 +24,13 @@ agentport converts with these rules, reports per field what was **mapped**, **tr
 ## Install
 
 ```bash
+# Homebrew (macOS, Linux)
+brew install somaz94/tap/agentport
+
+# Release binary, into /usr/local/bin
+curl -sSL https://raw.githubusercontent.com/somaz94/agentport/main/scripts/install.sh | bash
+
+# From source
 go install github.com/somaz94/agentport/cmd/agentport@latest
 ```
 
