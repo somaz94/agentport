@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.1.1](https://github.com/somaz94/agentport/compare/v0.1.0...v0.1.1) (2026-10-06)
+
+### Bug Fixes
+
+- stop args Strip deleting text and Hint truncating hints ([37d17bc](https://github.com/somaz94/agentport/commit/37d17bc0c539cca77db065f02236e41afb1ac2a0))
+
+### Code Refactoring
+
+- share the args unescaped-dollar prefix and fuzz Hint ([8f151db](https://github.com/somaz94/agentport/commit/8f151db87aa6c5e531b2ba2d005173d24176cf0e))
+- simplify args Strip and Hint, stop Named panicking ([dda040e](https://github.com/somaz94/agentport/commit/dda040e201fd56d16308e2616426a9eec6ca286f))
+
+### Contributors
+
+- somaz
+
+<br/>
+
 ## [v0.1.0](https://github.com/somaz94/agentport/releases/tag/v0.1.0) (2026-10-06)
 
 ### Features
