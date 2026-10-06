@@ -20,10 +20,13 @@ const (
 	invocationEnd = "`. "
 )
 
+// A $ not preceded by a backslash: Claude Code leaves `\$` literal.
+const unescaped = `(^|[^\\])\$`
+
 var (
 	// An unescaped $ARGUMENTS, $ARGUMENTS[N] or $N, the forms Claude Code substitutes.
-	placeholder = regexp.MustCompile(`(^|[^\\])\$(ARGUMENTS(\[\d+\])?|\d+)`)
-	indexed     = regexp.MustCompile(`(^|[^\\])\$(ARGUMENTS\[\d+\]|\d+)`)
+	placeholder = regexp.MustCompile(unescaped + `(ARGUMENTS(\[\d+\])?|\d+)`)
+	indexed     = regexp.MustCompile(unescaped + `(ARGUMENTS\[\d+\]|\d+)`)
 	// Inline !`cmd` at line start or after whitespace, or a fenced block opened with ```! or ~~~!.
 	shellInjection = regexp.MustCompile("(?m)((^|\\s)!`[^`\\n]+`|^[ \\t]*(```+|~~~+)!)")
 	// Variables Claude Code expands in skill and command bodies.
@@ -47,7 +50,7 @@ func Named(body string, names []string) []string {
 	var used []string
 	for _, n := range names {
 		// Skip a name that cannot compile (invalid UTF-8) rather than panic.
-		re, err := regexp.Compile(`(^|[^\\])\$` + regexp.QuoteMeta(n) + `\b`)
+		re, err := regexp.Compile(unescaped + regexp.QuoteMeta(n) + `\b`)
 		if err == nil && re.MatchString(body) {
 			used = append(used, n)
 		}

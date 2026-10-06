@@ -21,6 +21,10 @@ func TestDetection(t *testing.T) {
 		{"  ~~~~!\ngit log\n~~~~", false, false, true},
 		{"Not an injection: a!`b`", false, false, false},
 		{"Not one line: !`a\nb`", false, false, false},
+		{`\$0 and \$ARGUMENTS[1] stay literal.`, false, false, false},
+		{`\$0 is escaped, $1 is not`, true, true, false},
+		{"Second line:\n$1", true, true, false},
+		{"$ARGUMENTS[x] is not an index", true, false, false},
 	}
 	for _, c := range cases {
 		t.Run(c.body, func(t *testing.T) {
@@ -50,11 +54,27 @@ func TestClaudeOnlyReferences(t *testing.T) {
 			t.Errorf("AttachesFiles(%q) = %v; want %v", body, got, want)
 		}
 	}
-	if got := Named("Deploy $env to $region, not $regional.", []string{"env", "region", "zone"}); !reflect.DeepEqual(got, []string{"env", "region"}) {
-		t.Errorf("Named = %v", got)
-	}
-	if got := Named("$x", []string{"\xff"}); got != nil {
-		t.Errorf("Named with an invalid UTF-8 name = %v; want nil", got)
+}
+
+func TestNamed(t *testing.T) {
+	for _, c := range []struct {
+		body        string
+		names, want []string
+	}{
+		{"Deploy $env to $region, not $regional.", []string{"env", "region", "zone"}, []string{"env", "region"}},
+		// Declaration order, not body order: Prepend's "in that order" sentence relies on it.
+		{"$region before $env", []string{"env", "region"}, []string{"env", "region"}},
+		{`Escaped \$env, then $zone`, []string{"env", "zone"}, []string{"zone"}},
+		// One alternation regexp would consume the v before $zone and miss it.
+		{"$env$zone", []string{"env", "zone"}, []string{"env", "zone"}},
+		{"$envoy", []string{"env"}, nil},
+		{"$x", []string{"\xff"}, nil},
+	} {
+		t.Run(c.body, func(t *testing.T) {
+			if got := Named(c.body, c.names); !reflect.DeepEqual(got, c.want) {
+				t.Errorf("Named(%q, %q) = %q; want %q", c.body, c.names, got, c.want)
+			}
+		})
 	}
 }
 
@@ -114,22 +134,34 @@ func TestStripAcceptsEditedPreambles(t *testing.T) {
 }
 
 func TestHint(t *testing.T) {
-	body := Prepend("Run $ARGUMENTS\n", "/demo [path | --all]", false, nil)
-	if got := Hint(body, "/", "demo"); got != "[path | --all]" {
-		t.Errorf("Hint = %q", got)
+	withHint := Prepend("Run $ARGUMENTS\n", "/demo [path | --all]", false, nil)
+	for _, c := range []struct{ name, body, prefix, want string }{
+		{"hint", withHint, "/", "[path | --all]"},
+		{"no hint", Prepend("x", "$demo", false, nil), "$", ""},
+		{"wrong prefix", withHint, "$", ""},
+		{"no preamble", "plain body", "/", ""},
+		{"truncated preamble", Begin + "\n" + invokedAs + "/demo x", "/", ""},
+		{"emptied preamble", Begin + "\n" + End + "\n\nx", "/", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := Hint(c.body, c.prefix, "demo"); got != c.want {
+				t.Errorf("Hint = %q; want %q", got, c.want)
+			}
+		})
 	}
-	if got := Hint(Prepend("x", "$demo", false, nil), "$", "demo"); got != "" {
-		t.Errorf("Hint without a hint = %q", got)
-	}
-	if got := Hint(body, "$", "demo"); got != "" {
-		t.Errorf("Hint with the wrong prefix = %q", got)
-	}
-	if got := Hint("plain body", "/", "demo"); got != "" {
-		t.Errorf("Hint without a preamble = %q", got)
-	}
-	if got := Hint(Begin+"\n"+invokedAs+"/demo x", "/", "demo"); got != "" {
-		t.Errorf("Hint of a truncated preamble = %q", got)
-	}
+}
+
+func FuzzHint(f *testing.F) {
+	f.Add("[path | --all]")
+	f.Add("<a>\n<b>")
+	f.Fuzz(func(t *testing.T, hint string) {
+		if strings.Contains(hint, invocationEnd) {
+			t.Skip() // Hint cuts at the first invocationEnd, so such a hint comes back truncated.
+		}
+		if got := Hint(Prepend("x", "/demo "+hint, true, []string{"env"}), "/", "demo"); got != hint {
+			t.Errorf("Hint(Prepend(%q)) = %q", hint, got)
+		}
+	})
 }
 
 func FuzzPrependStrip(f *testing.F) {
