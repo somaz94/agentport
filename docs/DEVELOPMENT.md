@@ -15,7 +15,7 @@
 make build        # ./bin/agentport
 make test         # go test ./... -v -race -cover
 make cover        # coverage report
-make cover-check  # fail below COVER_MIN (cmd/main.go is excluded; it only calls into cmd/cli)
+make cover-check  # fail below COVER_MIN (cmd/agentport/main.go is excluded; it only calls into cmd/cli)
 make fmt          # go fmt
 make vet          # go vet
 make ci           # tidy-check, fmt-check, vet, test, cover-check, build, then runs the binary

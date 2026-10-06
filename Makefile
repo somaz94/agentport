@@ -4,7 +4,7 @@ APP_NAME=agentport
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 BUILD_DATE=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-# cmd/main.go only calls cli.Main, so the gate covers the testable packages.
+# cmd/agentport/main.go only calls cli.Main, so the gate covers the testable packages.
 COVER_PKGS=./cmd/cli/... ./internal/...
 COVER_MIN=90
 # Adapters are exercised through internal/convert, so coverage is measured across packages.
@@ -15,7 +15,7 @@ LDFLAGS=-ldflags "-X github.com/somaz94/agentport/cmd/cli.Version=$(VERSION) -X 
 ## Build
 
 build: ## Build the binary
-	go build $(LDFLAGS) -o bin/$(APP_NAME) ./cmd/
+	go build $(LDFLAGS) -o bin/$(APP_NAME) ./cmd/$(APP_NAME)
 
 clean: ## Remove build artifacts and coverage files
 	rm -rf bin/ coverage.out coverage.raw coverage.html
@@ -71,8 +71,8 @@ ci: tidy-check fmt-check vet test cover-check build ## Run every check CI runs
 
 ## Install
 
-install: build ## Install to /usr/local/bin
-	cp bin/$(APP_NAME) /usr/local/bin/$(APP_NAME)
+install: ## Install to $GOBIN, or $GOPATH/bin when unset
+	go install $(LDFLAGS) ./cmd/$(APP_NAME)
 
 ## Workflow
 

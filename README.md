@@ -21,6 +21,14 @@ agentport converts with these rules, reports per field what was **mapped**, **tr
 
 <br/>
 
+## Install
+
+```bash
+go install github.com/somaz94/agentport/cmd/agentport@latest
+```
+
+<br/>
+
 ## Usage
 
 ```bash
@@ -48,6 +56,7 @@ Every command takes `-o json`. Settings such as the target harnesses and transla
 
 ```bash
 make build    # ./bin/agentport
+make install  # go install into $GOBIN, or $GOPATH/bin when unset
 make ci       # every check CI runs
 ```
 
