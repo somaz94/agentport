@@ -14,7 +14,11 @@ const (
 	End   = "<!-- agentport:args:end -->"
 )
 
-const invokedAs = "> **Arguments**: invoked as `"
+// Hint parses the invocation back out from between these two.
+const (
+	invokedAs     = "> **Arguments**: invoked as `"
+	invocationEnd = "`. "
+)
 
 var (
 	// An unescaped $ARGUMENTS, $ARGUMENTS[N] or $N, the forms Claude Code substitutes.
@@ -42,7 +46,9 @@ func Indexed(body string) bool {
 func Named(body string, names []string) []string {
 	var used []string
 	for _, n := range names {
-		if regexp.MustCompile(`(^|[^\\])\$` + regexp.QuoteMeta(n) + `\b`).MatchString(body) {
+		// Skip a name that cannot compile (invalid UTF-8) rather than panic.
+		re, err := regexp.Compile(`(^|[^\\])\$` + regexp.QuoteMeta(n) + `\b`)
+		if err == nil && re.MatchString(body) {
 			used = append(used, n)
 		}
 	}
@@ -80,7 +86,7 @@ func Prepend(body, invocation string, positional bool, named []string) string {
 	body, _ = Strip(body)
 	var b strings.Builder
 	b.WriteString(Begin + "\n")
-	b.WriteString(invokedAs + invocation + "`. The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text.")
+	b.WriteString(invokedAs + invocation + invocationEnd + "The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text.")
 	if positional {
 		b.WriteString(" `$0`, `$1`, … and `$ARGUMENTS[N]` are those arguments split like shell words, counting from zero.")
 	}
@@ -99,25 +105,24 @@ func Strip(body string) (string, bool) {
 	if !strings.HasPrefix(body, Begin+"\n") {
 		return body, false
 	}
-	i := strings.Index(body, "\n"+End)
-	if i < 0 {
+	// Cut the whole body, not the text after Begin, so an emptied preamble still strips.
+	_, rest, ok := strings.Cut(body, "\n"+End)
+	if !ok {
 		return body, false
 	}
-	rest := strings.TrimPrefix(body[i+1+len(End):], "\n")
-	return strings.TrimPrefix(rest, "\n"), true
+	return strings.TrimPrefix(strings.TrimPrefix(rest, "\n"), "\n"), true
 }
 
 // Hint recovers the argument hint from a preamble: the invocation text after `prefix+name `.
 func Hint(body, prefix, name string) string {
-	if !strings.HasPrefix(body, Begin+"\n"+invokedAs) {
+	rest, ok := strings.CutPrefix(body, Begin+"\n"+invokedAs)
+	if !ok {
 		return ""
 	}
-	rest := body[len(Begin)+1+len(invokedAs):]
-	end := strings.Index(rest, "`. ")
-	if end < 0 {
+	invocation, _, ok := strings.Cut(rest, invocationEnd)
+	if !ok {
 		return ""
 	}
-	invocation := rest[:end]
 	if hint, ok := strings.CutPrefix(invocation, prefix+name+" "); ok {
 		return hint
 	}

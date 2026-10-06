@@ -53,6 +53,21 @@ func TestClaudeOnlyReferences(t *testing.T) {
 	if got := Named("Deploy $env to $region, not $regional.", []string{"env", "region", "zone"}); !reflect.DeepEqual(got, []string{"env", "region"}) {
 		t.Errorf("Named = %v", got)
 	}
+	if got := Named("$x", []string{"\xff"}); got != nil {
+		t.Errorf("Named with an invalid UTF-8 name = %v; want nil", got)
+	}
+}
+
+// A literal, not the package constants, so editing a constant cannot move both sides.
+func TestPrependBytes(t *testing.T) {
+	want := "<!-- agentport:args:begin -->\n" +
+		"> **Arguments**: invoked as `/demo [path]`. The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text." +
+		" `$0`, `$1`, … and `$ARGUMENTS[N]` are those arguments split like shell words, counting from zero." +
+		" `$env`, `$region` are those arguments in that order.\n" +
+		"<!-- agentport:args:end -->\n\nbody\n"
+	if got := Prepend("body\n", "/demo [path]", true, []string{"env", "region"}); got != want {
+		t.Errorf("Prepend =\n%q\nwant\n%q", got, want)
+	}
 }
 
 func TestPrependStripRoundTrip(t *testing.T) {
@@ -74,10 +89,27 @@ func TestPrependStripRoundTrip(t *testing.T) {
 
 func TestStripOnlyAtStart(t *testing.T) {
 	quoted := "The markers are `" + Begin + "` and later\n" + End + "\nkeep me\n"
-	for _, body := range []string{"no markers\n", Begin + "\nbut no end\n", quoted} {
+	for _, body := range []string{"no markers\n", Begin + "\nbut no end\n", quoted, Begin + End + "\nbody"} {
 		if got, ok := Strip(body); ok || got != body {
 			t.Errorf("Strip(%q) = %q, %v; want it unchanged", body, got, ok)
 		}
+	}
+}
+
+func TestStripAcceptsEditedPreambles(t *testing.T) {
+	for _, c := range []struct{ name, in, want string }{
+		{"emptied", Begin + "\n" + End + "\n\nbody", "body"},
+		{"end at eof", Begin + "\n" + End, ""},
+		{"one newline", Begin + "\nx\n" + End + "\nbody", "body"},
+		{"third newline kept", Begin + "\nx\n" + End + "\n\n\nbody", "\nbody"},
+		{"text after end kept", Begin + "\nx\n" + End + " note\nbody", " note\nbody"},
+		{"wrapped", Begin + "\na\nb\n" + End + "\n\nbody", "body"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got, ok := Strip(c.in); !ok || got != c.want {
+				t.Errorf("Strip(%q) = %q, %v; want %q, true", c.in, got, ok, c.want)
+			}
+		})
 	}
 }
 
