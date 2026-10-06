@@ -1,10 +1,11 @@
 # Codex customization format
 
-Pinned to **Codex CLI `rust-v0.159.3`** (commit `01fc69f`), verified 2026-10-01 by reading the source at that tag. Codex was not installed for this check, so nothing here is end-to-end tested yet.
+Pinned to **Codex CLI `rust-v0.159.3`** (commit `01fc69f`), verified 2026-10-01 by reading the source at that tag, and on 2026-10-06 by loading converted fixtures into the installed `codex-cli 0.159.3` (rows marked **probe**).
 
 | Mark | Meaning |
 |---|---|
 | **source** | `github.com/openai/codex` at `rust-v0.159.3`; paths below are relative to `codex-rs/` |
+| **probe** | Observed: fixtures were loaded by the installed CLI's app-server and the result read back over its stdio protocol, or rendered by `codex debug prompt-input` (see [Reproduce](#reproduce)) |
 | **docs** | learn.chatgpt.com/docs, used only where it agrees with the source |
 | **release** | GitHub release notes / merged PRs |
 
@@ -45,7 +46,7 @@ Read leniently; invalid YAML ignores the whole file with a warning.
 
 | Key | Behaviour |
 |---|---|
-| `policy.allow_implicit_invocation` | Default `true`. `false` hides the skill from the model's catalog — the equivalent of Claude's `disable-model-invocation: true` |
+| `policy.allow_implicit_invocation` | Default `true`. `false` hides the skill from the model's catalog — the equivalent of Claude's `disable-model-invocation: true`. The skill still loads: `skills/list` reports it enabled, and only `codex debug prompt-input` leaves it out (probe) |
 | `interface.display_name`, `short_description`, `default_prompt`, `icon_small`, `icon_large`, `brand_color` | UI presentation |
 | `dependencies.tools[]` | `type` + `value` required |
 
@@ -65,7 +66,7 @@ Identity is the `name` key, not the file name. A role file that is itself a **sy
 | `[features]` | Only `false` values for `shell_tool`, `apps`, `plugins`, `memories`, `request_permissions_tool` are applied; `true` is ignored |
 | `[skills]` | Only `config = [{name\|path, enabled = false}]`, `bundled.enabled = false`, `include_instructions = false` |
 
-**Unknown keys are fatal for the role.** The file is parsed with `deny_unknown_fields` over a flattened `config.toml` schema, so a key that is not a `config.toml` key drops the role with a startup warning ("Ignoring malformed agent role definition"). Keys that are valid in `config.toml` but not in the list above — `sandbox_mode`, `approval_policy`, `mcp_servers`, `web_search` — parse and are **silently not applied** (since `rust-v0.149.0`, PR #39299; the subagent docs still list `sandbox_mode` and `mcp_servers`).
+**Unknown keys are fatal for the role.** The file is parsed with `deny_unknown_fields` over a flattened `config.toml` schema, so a key that is not a `config.toml` key drops the role with a startup warning ("Ignoring malformed agent role definition"). The app-server sends that warning as a `configWarning` notification right after `initialize`, for an unknown key, a value of the wrong type (`description = 42`) and invalid TOML alike (probe). Keys that are valid in `config.toml` but not in the list above — `sandbox_mode`, `approval_policy`, `mcp_servers`, `web_search` — parse and are **silently not applied** (since `rust-v0.149.0`, PR #39299; the subagent docs still list `sandbox_mode` and `mcp_servers`).
 
 A user role overrides a built-in one of the same name (`default`, `explorer`, `worker`). A project role overrides a user role field by field.
 
@@ -109,3 +110,18 @@ Tool names in hook payloads and matchers are Claude-compatible: `exec_command` i
 ## Built-in Claude importer
 
 `/import` in the TUI (not a `codex` subcommand) converts Claude commands into skills named `source-command-<slug>`, and **skips any command whose body contains** `$ARGUMENTS`, `$<digit>`, `{{ … }}`, `` !` ``, or a token starting with `@`. Claude agents become role files with `name`, `description`, `developer_instructions`; `tools` is not mapped; `effort: max` becomes `xhigh` and a level outside `none` … `xhigh` is dropped; and `permissionMode` is written to `sandbox_mode`, which a role does not apply (source, `core-plugins/src/command_migration.rs`, `external-agent-migration/src/subagents.rs`).
+
+<br/>
+
+## Reproduce
+
+The installed CLI's app-server runs against any home directory and speaks JSON, one object per line, on stdio, so fixtures can be checked without touching the real `~/.codex` or signing in:
+
+```bash
+SANDBOX=$(mktemp -d)
+mkdir -p "$SANDBOX/.agents/skills" "$SANDBOX/.codex/agents" "$SANDBOX/ws"
+# write fixtures under $SANDBOX/.agents/skills and $SANDBOX/.codex/agents
+cd "$SANDBOX/ws" && HOME="$SANDBOX" CODEX_HOME="$SANDBOX/.codex" codex app-server
+```
+
+Send `{"id":1,"method":"initialize","params":{"clientInfo":{"name":"probe","version":"0"}}}`, then `{"method":"initialized"}`, then `skills/list` with `"params":{"cwds":["<the ws directory>"],"forceReload":true}`. Role files load at `initialize`, and each one Codex rejects arrives as a `configWarning` before the `skills/list` reply. Codex has no request that lists roles, so a role that loads is one that produced no warning. `codex debug prompt-input`, run with the same environment, prints the model-visible prompt input as JSON, skills catalog included. Starting a thread is not needed, and it opens a connection to the API.

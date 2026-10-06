@@ -1,7 +1,6 @@
 package convert
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -118,7 +117,7 @@ func startServer(t *testing.T, bin, root string) string {
 		fmt.Sprintf("-http_server_port=%d", port), fmt.Sprintf("-cdp_port=%d", cdp))
 	cmd.Dir = filepath.Join(root, "ws")
 	cmd.Env = append(os.Environ(), "HOME="+filepath.Join(root, "home"))
-	var logs bytes.Buffer
+	var logs lockedBuffer
 	cmd.Stdout, cmd.Stderr = &logs, &logs
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)

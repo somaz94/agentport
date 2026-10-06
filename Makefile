@@ -1,4 +1,4 @@
-.PHONY: build clean test test-unit e2e-antigravity cover cover-html cover-check golden fmt fmt-check vet tidy-check ci install check-gh branch pr help
+.PHONY: build clean test test-unit e2e-antigravity e2e-codex cover cover-html cover-check golden fmt fmt-check vet tidy-check ci install check-gh branch pr help
 
 APP_NAME=agentport
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -30,7 +30,13 @@ test-unit: ## Run unit tests with coverage
 AG_LANGUAGE_SERVER ?= /Applications/Antigravity.app/Contents/Resources/bin/language_server
 
 e2e-antigravity: ## Load converted skill, command and agent fixtures with the Antigravity desktop app's own loader
-	AGENTPORT_AG_LANGUAGE_SERVER=$(AG_LANGUAGE_SERVER) go test ./internal/convert/ -run TestAntigravity -v
+	AGENTPORT_AG_LANGUAGE_SERVER=$(AG_LANGUAGE_SERVER) go test ./internal/convert/ -run TestAntigravity -count=1 -v
+
+CODEX_BIN ?= $(shell command -v codex)
+
+e2e-codex: ## Load converted skill, command and agent fixtures with the Codex CLI's own app-server
+	@test -n "$(CODEX_BIN)" || { echo "codex not found on PATH; set CODEX_BIN" >&2; exit 1; }
+	AGENTPORT_CODEX_BIN=$(CODEX_BIN) go test ./internal/convert/ -run TestCodexLoadsConverted -count=1 -v
 
 ## Coverage
 

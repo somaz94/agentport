@@ -6,6 +6,6 @@ Field-level reference for each harness agentport reads or writes. Each file pins
 |---|---|---|
 | [claude-code.md](claude-code.md) | Claude Code (the hub) | Docs plus the native binary's parser literals |
 | [antigravity.md](antigravity.md) | Antigravity desktop app | Fixtures loaded by the app's own language server, read back over its local RPC; tool names also checked in real conversations |
-| [codex.md](codex.md) | Codex CLI | Source at a pinned release tag |
+| [codex.md](codex.md) | Codex CLI | Source at a pinned release tag; rows marked probe by fixtures loaded by the installed CLI's app-server, read back over its stdio protocol |
 
 When a harness ships a new version, re-verify against it and update the pin in that file's first line; do not mix rows from two versions in one file.
