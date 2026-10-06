@@ -105,6 +105,9 @@ func TestPrependStripRoundTrip(t *testing.T) {
 	if again := Prepend(got, "$demo", true, []string{"env"}); strings.Count(again, Begin) != 1 || !strings.Contains(again, "`$0`") || !strings.Contains(again, "`$env` are those arguments") {
 		t.Errorf("re-prepending stacked preambles or lost the positional note:\n%s", again)
 	}
+	if got := Prepend("x", "/demo [a\n\n\nb]", false, nil); !strings.Contains(got, "`/demo [a\nb]`") {
+		t.Errorf("Prepend kept a blank line from the invocation:\n%s", got)
+	}
 }
 
 func TestStripOnlyAtStart(t *testing.T) {
@@ -124,6 +127,8 @@ func TestStripAcceptsEditedPreambles(t *testing.T) {
 		{"third newline kept", Begin + "\nx\n" + End + "\n\n\nbody", "\nbody"},
 		{"text after end kept", Begin + "\nx\n" + End + " note\nbody", " note\nbody"},
 		{"wrapped", Begin + "\na\nb\n" + End + "\n\nbody", "body"},
+		{"blank line before end", Begin + "\nx\n\n" + End + "\n\nbody", "body"},
+		{"blank lines at both edges", Begin + "\n\n> x\n\n\n" + End + "\n\nbody", "body"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if got, ok := Strip(c.in); !ok || got != c.want {
@@ -133,10 +138,26 @@ func TestStripAcceptsEditedPreambles(t *testing.T) {
 	}
 }
 
+func TestStripKeepsTextWhenEndWasDeleted(t *testing.T) {
+	for _, body := range []string{
+		Begin + "\n> invoked as\n\n# Title\n\nimportant text\n" + End + "\nmore\n",
+		Begin + "\nx\n\ny\n" + End + "\n\nbody",
+	} {
+		if got, ok := Strip(body); ok || got != body {
+			t.Errorf("Strip(%q) = %q, %v; want it unchanged", body, got, ok)
+		}
+	}
+}
+
 func TestHint(t *testing.T) {
 	withHint := Prepend("Run $ARGUMENTS\n", "/demo [path | --all]", false, nil)
 	for _, c := range []struct{ name, body, prefix, want string }{
 		{"hint", withHint, "/", "[path | --all]"},
+		{"hint containing invocationEnd", Prepend("x $ARGUMENTS", "/demo [`a`. b]", false, nil), "/", "[`a`. b]"},
+		{"reworded sentence", Begin + "\n" + invokedAs + "/demo [a]`. Reworded.\n" + End + "\n\nx", "/", "[a]"},
+		{"reworded sentence, body quoting it", strings.Replace(Prepend("`/x`. "+argsSentence+" $ARGUMENTS", "/demo [a]", false, nil), argsSentence, "Reworded.", 1), "/", "[a]"},
+		// The fallback cannot tell a hint's invocationEnd from the real one.
+		{"reworded sentence, hint with invocationEnd", strings.Replace(Prepend("x $ARGUMENTS", "/demo [`a`. b]", false, nil), argsSentence, "Reworded.", 1), "/", "[`a"},
 		{"no hint", Prepend("x", "$demo", false, nil), "$", ""},
 		{"wrong prefix", withHint, "$", ""},
 		{"no preamble", "plain body", "/", ""},
@@ -154,9 +175,10 @@ func TestHint(t *testing.T) {
 func FuzzHint(f *testing.F) {
 	f.Add("[path | --all]")
 	f.Add("<a>\n<b>")
+	f.Add("[`a`. b]")
 	f.Fuzz(func(t *testing.T, hint string) {
-		if strings.Contains(hint, invocationEnd) {
-			t.Skip() // Hint cuts at the first invocationEnd, so such a hint comes back truncated.
+		if strings.Contains(hint, invocationEnd+argsSentence) || strings.Contains(hint, "\n"+End) || strings.Contains(hint, "\n\n") {
+			t.Skip() // Hint would end at the copied sentence or End; Prepend collapses blank lines.
 		}
 		if got := Hint(Prepend("x", "/demo "+hint, true, []string{"env"}), "/", "demo"); got != hint {
 			t.Errorf("Hint(Prepend(%q)) = %q", hint, got)
@@ -167,8 +189,9 @@ func FuzzHint(f *testing.F) {
 func FuzzPrependStrip(f *testing.F) {
 	f.Add("# T\n\n$ARGUMENTS\n", "/x [a]")
 	f.Add("", "$x")
+	f.Add("# T\n", "/x [a\n\n\nb]")
 	f.Fuzz(func(t *testing.T, body, invocation string) {
-		if strings.HasPrefix(body, Begin) || strings.Contains(invocation, "\n") || strings.Contains(invocation, End) {
+		if strings.HasPrefix(body, Begin) || strings.Contains(invocation, End) {
 			t.Skip()
 		}
 		if back, ok := Strip(Prepend(body, invocation, false, nil)); !ok || back != body {

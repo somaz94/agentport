@@ -14,10 +14,11 @@ const (
 	End   = "<!-- agentport:args:end -->"
 )
 
-// Hint parses the invocation back out from between these two.
+// The preamble starts invokedAs + invocation + invocationEnd + argsSentence; Hint parses it back.
 const (
 	invokedAs     = "> **Arguments**: invoked as `"
 	invocationEnd = "`. "
+	argsSentence  = "The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text."
 )
 
 // A $ not preceded by a backslash: Claude Code leaves `\$` literal.
@@ -87,9 +88,13 @@ func AttachesFiles(body string) bool {
 // already carrying a preamble gets a fresh one.
 func Prepend(body, invocation string, positional bool, named []string) string {
 	body, _ = Strip(body)
+	// Strip refuses a preamble with a blank line between its lines, so the invocation must not add one.
+	for strings.Contains(invocation, "\n\n") {
+		invocation = strings.ReplaceAll(invocation, "\n\n", "\n")
+	}
 	var b strings.Builder
 	b.WriteString(Begin + "\n")
-	b.WriteString(invokedAs + invocation + invocationEnd + "The text typed after the skill name is the arguments; wherever this file says `$ARGUMENTS`, use that text.")
+	b.WriteString(invokedAs + invocation + invocationEnd + argsSentence)
 	if positional {
 		b.WriteString(" `$0`, `$1`, … and `$ARGUMENTS[N]` are those arguments split like shell words, counting from zero.")
 	}
@@ -103,14 +108,16 @@ func Prepend(body, invocation string, positional bool, named []string) string {
 
 // Strip removes a preamble added by Prepend, with the blank line after it, and reports whether
 // there was one. Only a preamble at the very start counts, so a body that quotes the markers keeps
-// its text.
+// its text. One with a blank line between two of its lines does not count either: its own End was
+// most likely deleted, and stripping up to a later one would take the body's text with it.
 func Strip(body string) (string, bool) {
 	if !strings.HasPrefix(body, Begin+"\n") {
 		return body, false
 	}
 	// Cut the whole body, not the text after Begin, so an emptied preamble still strips.
-	_, rest, ok := strings.Cut(body, "\n"+End)
-	if !ok {
+	before, rest, ok := strings.Cut(body, "\n"+End)
+	// Blank lines at the preamble's edges are formatting, not a sign of a deleted End.
+	if !ok || strings.Contains(strings.Trim(before[len(Begin):], "\n"), "\n\n") {
 		return body, false
 	}
 	return strings.TrimPrefix(strings.TrimPrefix(rest, "\n"), "\n"), true
@@ -122,7 +129,14 @@ func Hint(body, prefix, name string) string {
 	if !ok {
 		return ""
 	}
-	invocation, _, ok := strings.Cut(rest, invocationEnd)
+	// Only the preamble, so a body that quotes the sentence cannot stretch the hint.
+	rest, _, _ = strings.Cut(rest, "\n"+End)
+	// Prepend's own sentence marks the end even when the hint contains invocationEnd; a reworded
+	// sentence falls back to the first invocationEnd.
+	invocation, _, ok := strings.Cut(rest, invocationEnd+argsSentence)
+	if !ok {
+		invocation, _, ok = strings.Cut(rest, invocationEnd)
+	}
 	if !ok {
 		return ""
 	}
