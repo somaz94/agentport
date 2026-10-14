@@ -37,6 +37,6 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 	root.PersistentFlags().StringVarP(&opts.output, "output", "o", outputText, "output format: text or json")
-	root.AddCommand(newVersionCmd(opts), newMapCmd(opts), newConvertCmd(opts), newScanCmd(opts), newSyncCmd(opts), newStatusCmd(opts), newAdoptCmd(opts), newDoctorCmd(opts))
+	root.AddCommand(newVersionCmd(opts), newMapCmd(opts), newConvertCmd(opts), newScanCmd(opts), newSyncCmd(opts), newStatusCmd(opts), newAdoptCmd(opts), newDoctorCmd(opts), newInstructionsCmd(opts))
 	return root
 }

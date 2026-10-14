@@ -147,7 +147,8 @@ Antigravity reports none of these failures, so the writer checks all of them bef
 
 ### Instructions, hooks, MCP
 
-- **Instructions** are not generated. A hand-condensed `AGENTS.md` is the source for non-Claude harnesses; agentport checks its size against each harness's budget, warns when a `CLAUDE.md` section changed after `AGENTS.md` was last updated, and keeps one file per directory where Antigravity would otherwise load both `AGENTS.md` and `GEMINI.md`.
+- **Instructions** are not generated. A hand-condensed `AGENTS.md` is the source for non-Claude harnesses, and `doctor` keeps one file per directory where Antigravity would otherwise load both `AGENTS.md` and `GEMINI.md`. A size check against each harness's budget is planned, not built.
+- Since nothing regenerates `AGENTS.md`, a `CLAUDE.md` change would otherwise never reach it. `agentport instructions --mark` records, in `.agentport/instructions.json` beside the target's manifest, a hash of every `## ` section of the hub's `CLAUDE.md` as the version `AGENTS.md` was reviewed against. `agentport instructions` and `doctor` then name each section added, changed or removed since. Blank lines, trailing spaces and `<br/>` spacers are left out of the hash, and a `## ` line inside a fenced code block is not a heading. Neither command ever writes `AGENTS.md`.
 - **Hooks** map almost one to one into Codex, which reports its shell tool as `Bash` and lets the `Edit` / `Write` matchers select `apply_patch`. `apply_patch` carries no file path, so post-edit hooks need a shim that parses the patch. A converted Codex hook runs only after the user trusts it, which `sync` points out. Antigravity's events and payloads differ enough to need a normalizing shim.
 - **MCP** converts between JSON and TOML when a server list exists.
 

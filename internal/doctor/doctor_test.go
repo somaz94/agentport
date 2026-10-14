@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/somaz94/agentport/internal/harness"
+	"github.com/somaz94/agentport/internal/instructions"
 	"github.com/somaz94/agentport/internal/manifest"
 	"github.com/somaz94/agentport/internal/paths"
 )
@@ -109,6 +110,45 @@ func TestRunErrors(t *testing.T) {
 	}
 	if f := find(got, "claude locations"); len(f) != 1 || f[0].Status != Info {
 		t.Errorf("a missing hub = %+v", f)
+	}
+}
+
+func TestInstructionsReview(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	fakeVersions(t, map[harness.ID]func(context.Context) (string, string, error){
+		harness.Claude:      func(context.Context) (string, string, error) { return "", "", ErrNotInstalled },
+		harness.Codex:       func(context.Context) (string, string, error) { return "", "", ErrNotInstalled },
+		harness.Antigravity: func(context.Context) (string, string, error) { return "", "", ErrNotInstalled },
+	})
+	root := t.TempDir()
+	const check = "antigravity instructions review"
+	review := func() []Finding {
+		t.Helper()
+		return find(Run(context.Background(), Options{Scope: paths.ScopeUser, Root: root}), check)
+	}
+	put(t, root, ".claude/CLAUDE.md", "## A\n\na\n\n## B\n\nb\n")
+	if f := review(); len(f) != 0 {
+		t.Errorf("no AGENTS.md = %+v; want no finding", f)
+	}
+	put(t, root, ".gemini/config/AGENTS.md", "condensed\n")
+	if f := review(); len(f) != 1 || f[0].Status != Info || !strings.Contains(f[0].Message, "--mark --to antigravity") {
+		t.Errorf("unrecorded = %+v", f)
+	}
+	pairs, err := instructions.Pairs(harness.Claude, []harness.ID{harness.Antigravity})
+	must(t, err)
+	_, err = instructions.Mark(root, pairs[0])
+	must(t, err)
+	if f := review(); len(f) != 1 || f[0].Status != OK || !strings.Contains(f[0].Message, "2 sections") {
+		t.Errorf("current = %+v", f)
+	}
+	put(t, root, ".claude/CLAUDE.md", "## A\n\na\n\n## B\n\nb edited\n\n## Local Limits\n\nc\n")
+	if f := review(); len(f) != 1 || f[0].Status != Warn || !strings.Contains(f[0].Message, `2 sections`) ||
+		!strings.Contains(f[0].Message, `added "Local Limits"; changed "B"`) {
+		t.Errorf("changed = %+v", f)
+	}
+	put(t, root, ".gemini/config/.agentport/instructions.json", "{")
+	if f := review(); len(f) != 1 || f[0].Status != Error {
+		t.Errorf("malformed record = %+v", f)
 	}
 }
 

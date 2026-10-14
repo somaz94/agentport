@@ -17,6 +17,7 @@ import (
 
 	"github.com/somaz94/agentport/internal/config"
 	"github.com/somaz94/agentport/internal/harness"
+	"github.com/somaz94/agentport/internal/instructions"
 	"github.com/somaz94/agentport/internal/ir"
 	"github.com/somaz94/agentport/internal/manifest"
 	"github.com/somaz94/agentport/internal/paths"
@@ -91,7 +92,8 @@ func Run(ctx context.Context, opts Options) []Finding {
 		}
 	}
 	if opts.Scope == paths.ScopeUser {
-		instructions(opts, add)
+		bothInstructions(opts, add)
+		reviews(opts, cfg.Hub, add)
 	}
 	return out
 }
@@ -190,9 +192,9 @@ func manifests(opts Options, h harness.ID, l paths.Layout, add adder) {
 	add(check, OK, "%s: %d files recorded", display(opts, rel), len(m.Entries))
 }
 
-// instructions flags an Antigravity configuration directory holding both instruction files, which
-// Antigravity loads as two separate global entries (docs/spec/antigravity.md).
-func instructions(opts Options, add adder) {
+// bothInstructions flags an Antigravity configuration directory holding both instruction files,
+// which Antigravity loads as two separate global entries (docs/spec/antigravity.md).
+func bothInstructions(opts Options, add adder) {
 	l, err := paths.For(harness.Antigravity)
 	if err != nil {
 		return
@@ -209,6 +211,33 @@ func instructions(opts Options, add adder) {
 	}
 	if both {
 		add("antigravity instructions", Warn, "%s holds both AGENTS.md and GEMINI.md; Antigravity loads both, so keep one", display(opts, root))
+	}
+}
+
+// reviews flags hub instruction sections that changed since a target's hand-condensed instruction
+// file was last marked reviewed, since that file is never generated and would otherwise go stale.
+func reviews(opts Options, hub harness.ID, add adder) {
+	pairs, err := instructions.Pairs(hub, nil)
+	if err != nil {
+		add("instructions review", Error, "%v", err)
+		return
+	}
+	for _, p := range pairs {
+		check := string(p.Target) + " instructions review"
+		rep, err := instructions.Check(opts.Root, p)
+		if err != nil {
+			add(check, Error, "%v", err)
+			continue
+		}
+		file, hubFile := display(opts, p.File), display(opts, p.Hub)
+		switch rep.State {
+		case instructions.Unrecorded:
+			add(check, Info, "%s has never been marked reviewed against %s; once it covers every section, run `agentport instructions --mark --to %s`", file, hubFile, p.Target)
+		case instructions.Current:
+			add(check, OK, "%s was reviewed against the current %s (%d sections)", file, hubFile, rep.Sections)
+		case instructions.Changed:
+			add(check, Warn, "%d sections of %s changed since %s was last marked reviewed: %s; update it, then run `agentport instructions --mark --to %s`", rep.Diff.Len(), hubFile, file, rep.Diff, p.Target)
+		}
 	}
 }
 

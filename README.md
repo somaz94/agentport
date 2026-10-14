@@ -67,6 +67,8 @@ agentport sync --check        # write nothing; exit 3 when anything would change
 agentport status              # classify every unit in each target against the hub and the manifest
 agentport adopt ~/.gemini/config/skills/my-skill   # bring an edit made in a target back into the hub
 agentport doctor              # installed versions, locations, deprecated paths, manifests
+agentport instructions        # CLAUDE.md sections changed since each target's hand-kept AGENTS.md was last reviewed
+agentport instructions --mark # after updating AGENTS.md, record the current sections as reviewed
 ```
 
 Every command takes `-o json`. Settings such as the target harnesses and translation mirrors like `skills-ko/` come from a config file; see [Configuration](docs/design.md#configuration).
@@ -82,6 +84,7 @@ Every command takes `-o json`. Settings such as the target harnesses and transla
 - A file it did not write is never changed or deleted, unless it already holds exactly what agentport would write: it is then recorded as agentport's. One that differs and sits where agentport would write is reported as `conflict`. Move or delete it, or leave the hub item out with `skip` (see [Configuration](docs/design.md#configuration)), then sync again.
 - A file edited in the target since agentport wrote it is reported as `drift` and left alone. `agentport adopt <path>` carries the edit back into the hub; `agentport sync --apply --force` overwrites it.
 - When a hub item is removed, its output is deleted on the next `--apply`, unless it was edited: it is then reported as `drift` until `adopt`, or `--force` stops tracking it and leaves it in place.
+- `CLAUDE.md` is not synced. Each target keeps a hand-condensed `AGENTS.md`, and `agentport instructions` (also run by `doctor`) names the `CLAUDE.md` sections changed since that file was last marked reviewed with `--mark`. See [Instructions, hooks, MCP](docs/design.md#instructions-hooks-mcp).
 
 <br/>
 
