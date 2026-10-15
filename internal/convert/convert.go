@@ -66,10 +66,12 @@ func Skill(item *ir.Item, to harness.ID, opts Options) (Result, error) {
 	if err := paths.ValidName(item.Name); err != nil {
 		return Result{}, fmt.Errorf("skill name: %w", err)
 	}
-	files, report, err := c.write(item, opts)
+	var note loss.Report
+	files, report, err := c.write(withNote(item, to, &note), opts)
 	if err != nil {
 		return Result{}, err
 	}
+	report.Entries = append(report.Entries, note.Entries...)
 	checkBody(item, to, opts, &report)
 	report.Source = fmt.Sprintf("%s %s %s", item.Source.Harness.Title(), item.Kind, item.Name)
 	report.Target = fmt.Sprintf("%s skill %s", to.Title(), item.Name)

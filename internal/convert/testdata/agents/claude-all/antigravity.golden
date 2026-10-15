@@ -17,6 +17,10 @@ tools:
   - ask_question
 mainAgent: false
 ---
+<!-- agentport:tools:begin -->
+> **Tools**: this file names Claude Code tools. In Antigravity, `AskUserQuestion` is ask_question.
+<!-- agentport:tools:end -->
+
 Break the request into steps. When something is unclear, ask with AskUserQuestion.
 
 When the plan is done, delegate the review to `code-reviewer`.
@@ -46,8 +50,8 @@ When the plan is done, delegate the review to `code-reviewer`.
       },
       {
         "field": "body",
-        "status": "warn",
-        "detail": "mentions Claude Code's AskUserQuestion; Antigravity calls it ask_question"
+        "status": "transformed",
+        "detail": "mentions Claude Code's AskUserQuestion; a marked note says Antigravity calls it ask_question"
       }
     ]
   }

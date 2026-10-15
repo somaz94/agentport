@@ -2,6 +2,10 @@
 name = "planner"
 description = "Plans a change, then hands review to another agent."
 developer_instructions = '''
+<!-- agentport:tools:begin -->
+> **Tools**: this file names Claude Code tools. In Codex, `AskUserQuestion` is request_user_input (root thread and Plan mode only).
+<!-- agentport:tools:end -->
+
 Break the request into steps. When something is unclear, ask with AskUserQuestion.
 
 When the plan is done, delegate the review to `code-reviewer`.
@@ -32,8 +36,8 @@ When the plan is done, delegate the review to `code-reviewer`.
       },
       {
         "field": "body",
-        "status": "warn",
-        "detail": "mentions Claude Code's AskUserQuestion; Codex calls it request_user_input (root thread and Plan mode only)"
+        "status": "transformed",
+        "detail": "mentions Claude Code's AskUserQuestion; a marked note says Codex calls it request_user_input (root thread and Plan mode only)"
       }
     ]
   }

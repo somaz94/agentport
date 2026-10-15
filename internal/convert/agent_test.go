@@ -13,6 +13,7 @@ import (
 	"github.com/somaz94/agentport/internal/ir"
 	"github.com/somaz94/agentport/internal/loss"
 	"github.com/somaz94/agentport/internal/skilldir"
+	"github.com/somaz94/agentport/internal/toolnote"
 )
 
 // agentCases are fixtures under testdata/agents/<case>/, one agent file each.
@@ -382,7 +383,7 @@ func TestCheckBody(t *testing.T) {
 	var r loss.Report
 	checkBody(item, harness.Antigravity, Options{Agents: agents}, &r)
 	want := []loss.Entry{
-		{Field: "body", Status: loss.Warn, Detail: "mentions Claude Code's AskUserQuestion; Antigravity calls it ask_question"},
+		{Field: "body", Status: loss.Transformed, Detail: "mentions Claude Code's AskUserQuestion; a marked note says Antigravity calls it ask_question"},
 		{Field: "body", Status: loss.Warn, Detail: "refers to code-reviewer, which Antigravity does not have; convert it too"},
 	}
 	if !reflect.DeepEqual(r.Entries, want) {
@@ -409,8 +410,34 @@ func TestCheckBody(t *testing.T) {
 	none := *item
 	none.Body = "NotebookEdit only."
 	checkBody(&none, harness.Antigravity, Options{}, &r)
-	if len(r.Entries) != 1 || r.Entries[0].Detail != "mentions Claude Code's NotebookEdit, which Antigravity does not have" {
+	if len(r.Entries) != 1 || r.Entries[0].Detail != "mentions Claude Code's NotebookEdit, which Antigravity does not have; a marked note says so" {
 		t.Errorf("entries = %+v", r.Entries)
+	}
+}
+
+func TestWithNote(t *testing.T) {
+	item := &ir.Item{Kind: ir.KindAgent, Name: "planner", Source: ir.Source{Harness: harness.Claude}, Body: "Ask with AskUserQuestion.\n"}
+
+	var r loss.Report
+	out := withNote(item, harness.Antigravity, &r)
+	if out == item || !strings.HasPrefix(out.Body, toolnote.Begin) || item.Body != "Ask with AskUserQuestion.\n" || len(r.Entries) != 0 {
+		t.Fatalf("to Antigravity: body %q, source %q, entries %+v", out.Body, item.Body, r.Entries)
+	}
+	if same := withNote(item, harness.Claude, &r); same != item {
+		t.Error("a Claude Code body bound for Claude Code was copied")
+	}
+
+	// A file read back from Antigravity carries the note; written to Claude Code it loses it.
+	back := *out
+	back.Source.Harness = harness.Antigravity
+	got := withNote(&back, harness.Claude, &r)
+	if got.Body != item.Body || len(r.Entries) != 1 || r.Entries[0].Detail != "removed the agentport tools note" {
+		t.Errorf("to Claude Code: body %q, entries %+v", got.Body, r.Entries)
+	}
+	// Going on to Codex, the Antigravity note is dropped and none is added: the names are no longer Claude Code's to explain.
+	r = loss.Report{}
+	if got := withNote(&back, harness.Codex, &r); got.Body != item.Body || len(r.Entries) != 0 {
+		t.Errorf("to Codex: body %q, entries %+v", got.Body, r.Entries)
 	}
 }
 

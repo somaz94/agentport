@@ -8,45 +8,25 @@ import (
 	"github.com/somaz94/agentport/internal/harness"
 	"github.com/somaz94/agentport/internal/ir"
 	"github.com/somaz94/agentport/internal/loss"
+	"github.com/somaz94/agentport/internal/toolnote"
 )
-
-// claudeOnlyTools are Claude Code tool names distinct enough to find in prose, with what each
-// target calls the same tool (docs/spec/); no entry means the target has none. Names that are also
-// plain words, such as Read or Edit, are left out.
-var claudeOnlyTools = map[string]map[harness.ID]string{
-	"AskUserQuestion": {harness.Antigravity: "ask_question", harness.Codex: "request_user_input (root thread and Plan mode only)"},
-	"TodoWrite":       {harness.Codex: "update_plan, off by default"},
-	"TaskCreate":      {harness.Codex: "update_plan, off by default"},
-	"TaskUpdate":      {harness.Codex: "update_plan, off by default"},
-	"WebFetch":        {harness.Antigravity: "read_url_content"},
-	"WebSearch":       {harness.Antigravity: "search_web", harness.Codex: "web_search, set for the whole session"},
-	"NotebookEdit":    {},
-}
 
 // checkBody reports what item's body says that the target cannot honour as written: Claude Code
 // tool names, and agents it refers to that the target does not have.
 func checkBody(item *ir.Item, to harness.ID, opts Options, r *loss.Report) {
 	if item.Source.Harness == harness.Claude && to != harness.Claude {
-		names := make([]string, 0, len(claudeOnlyTools))
-		for name := range claudeOnlyTools {
-			names = append(names, name)
-		}
-		slices.Sort(names)
-		for _, name := range names {
-			if !mentions(item.Body, name) {
-				continue
-			}
-			if c := claudeOnlyTools[name][to]; c != "" {
-				r.Addf("body", loss.Warn, "mentions Claude Code's %s; %s calls it %s", name, to.Title(), c)
+		for _, name := range toolnote.Mentioned(item.Body) {
+			if c := toolnote.Counterpart(name, to); c != "" {
+				r.Addf("body", loss.Transformed, "mentions Claude Code's %s; a marked note says %s calls it %s", name, to.Title(), c)
 			} else {
-				r.Addf("body", loss.Warn, "mentions Claude Code's %s, which %s does not have", name, to.Title())
+				r.Addf("body", loss.Warn, "mentions Claude Code's %s, which %s does not have; a marked note says so", name, to.Title())
 			}
 		}
 	}
 	if a := opts.Agents; a != nil {
 		var missing []string
 		for _, name := range a.Known {
-			if name != item.Name && !a.Present[name] && !slices.Contains(missing, name) && mentions(item.Body, name) {
+			if name != item.Name && !a.Present[name] && !slices.Contains(missing, name) && toolnote.Mentions(item.Body, name) {
 				missing = append(missing, name)
 			}
 		}
@@ -58,25 +38,23 @@ func checkBody(item *ir.Item, to harness.ID, opts Options, r *loss.Report) {
 	}
 }
 
-// mentions reports whether name occurs in body as a whole word: not inside a longer name made of
-// letters, digits, `_` or `-`.
-func mentions(body, name string) bool {
-	for i := 0; name != ""; {
-		j := strings.Index(body[i:], name)
-		if j < 0 {
-			return false
-		}
-		start, end := i+j, i+j+len(name)
-		if (start == 0 || !nameByte(body[start-1])) && (end == len(body) || !nameByte(body[end])) {
-			return true
-		}
-		i = start + 1
+// withNote returns item as harness to should receive it: any tools note an earlier conversion left
+// is removed, and a Claude Code body bound elsewhere gets a fresh one. The caller's item is not
+// changed, so reports and adopt still see the source body.
+func withNote(item *ir.Item, to harness.ID, r *loss.Report) *ir.Item {
+	body, stripped := toolnote.Strip(item.Body)
+	if stripped && to == harness.Claude {
+		r.Add("body", loss.Transformed, "removed the agentport tools note")
 	}
-	return false
-}
-
-func nameByte(b byte) bool {
-	return b == '_' || b == '-' || '0' <= b && b <= '9' || 'a' <= b && b <= 'z' || 'A' <= b && b <= 'Z'
+	if item.Source.Harness == harness.Claude && to != harness.Claude {
+		body = toolnote.Prepend(body, to)
+	}
+	if body == item.Body {
+		return item
+	}
+	cp := *item
+	cp.Body = body
+	return &cp
 }
 
 func plural(n int, one, many string) string {

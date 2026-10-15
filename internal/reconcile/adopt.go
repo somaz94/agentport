@@ -26,6 +26,7 @@ import (
 	"github.com/somaz94/agentport/internal/paths"
 	"github.com/somaz94/agentport/internal/safefs"
 	"github.com/somaz94/agentport/internal/skilldir"
+	"github.com/somaz94/agentport/internal/toolnote"
 )
 
 // ErrHubChanged means what the hub converts to changed after agentport wrote the target unit,
@@ -611,7 +612,9 @@ func (m *merge) fields(edited, generated *ir.Item) {
 		}
 	}
 	eb, _ := args.Strip(edited.Body)
+	eb, _ = toolnote.Strip(eb)
 	gb, _ := args.Strip(generated.Body)
+	gb, _ = toolnote.Strip(gb)
 	if eb != gb {
 		m.doc.Body, m.body = eb, true
 	}

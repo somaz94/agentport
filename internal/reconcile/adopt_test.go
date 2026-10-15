@@ -84,6 +84,31 @@ func TestAdoptCommand(t *testing.T) {
 	}
 }
 
+func TestAdoptKeepsToolNoteOut(t *testing.T) {
+	root := hubRoot(t)
+	hubCmd := "---\ndescription: Ask then act\nargument-hint: <topic>\n---\nAsk about $ARGUMENTS with AskUserQuestion.\n"
+	put(t, root, ".claude/commands/ask.md", hubCmd, 0o644)
+	opts := options(root, nil, harness.Antigravity)
+	sync(t, opts)
+	rel := ".gemini/config/skills/ask/SKILL.md"
+	written := read(t, root, rel)
+	if !strings.Contains(written, "agentport:args") || !strings.Contains(written, "agentport:tools") {
+		t.Fatalf("converted skill lacks a preamble or the note:\n%s", written)
+	}
+	if s := unitState(t, opts, ".gemini/config/skills/ask"); !allUnchanged(s) {
+		t.Fatalf("a second sync sees the note as a change: %v", s)
+	}
+	put(t, root, rel, strings.Replace(written, "with AskUserQuestion.", "with AskUserQuestion, once.", 1), 0o644)
+
+	adopt(t, opts, ".gemini/config/skills/ask")
+	if got := read(t, root, ".claude/commands/ask.md"); got != strings.Replace(hubCmd, "with AskUserQuestion.", "with AskUserQuestion, once.", 1) {
+		t.Errorf("hub = %q; want only the body edit, no note or preamble", got)
+	}
+	if s := unitState(t, opts, ".gemini/config/skills/ask"); !allUnchanged(s) {
+		t.Errorf("after adopting, the unit is %v; want unchanged", s)
+	}
+}
+
 func TestAdoptAgentTools(t *testing.T) {
 	root := hubRoot(t)
 	opts := options(root, nil, harness.Antigravity)

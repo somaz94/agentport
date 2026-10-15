@@ -138,7 +138,15 @@ Antigravity reports none of these failures, so the writer checks all of them bef
 
 ### References inside bodies
 
-- Claude Code tool names distinct enough to find in prose (for example `AskUserQuestion`, `TodoWrite`, `WebFetch`) produce a `warn` when a body leaves Claude Code, naming the target's counterpart or saying it has none. Names that are also plain words, such as `Read` or `Edit`, are not checked.
+- Claude Code tool names distinct enough to find in prose (for example `AskUserQuestion`, `TodoWrite`, `WebFetch`) are left as written when a body leaves Claude Code, since a renamed tool could not be told apart from one the author wrote. A marked note goes in front of the body instead, after the arguments preamble when there is one, naming the target's counterpart for each tool the body mentions or saying it has none:
+
+  ```markdown
+  <!-- agentport:tools:begin -->
+  > **Tools**: this file names Claude Code tools. In Antigravity, `AskUserQuestion` is ask_question. Antigravity has no `TodoWrite`; skip what needs it.
+  <!-- agentport:tools:end -->
+  ```
+
+  A tool with a counterpart is reported `transformed`, one without is a `warn`. Converting a file back to Claude Code, or adopting it, removes the note by the same rules as the arguments preamble, and a conversion between two other harnesses drops it, since the names are no longer Claude Code's to explain. Names that are also plain words, such as `Read` or `Edit`, are not checked.
 - `convert` checks the agent names a body mentions against the agents the target already has at the user scope, taking the source harness's user-scope agents as the names to look for. A mentioned agent the target lacks is a `warn` that suggests converting it too.
 - `scan` checks tool names but not agent references: it grades portability, not what each harness has installed.
 - Paths under `~/.claude/` are not rewritten; on the same machine they still resolve. Antigravity asks before a subagent reads a file outside the conversation's workspace ([spec/antigravity.md](spec/antigravity.md#tool-names)), so there such a path waits for the user's approval and fails when nobody gives it.
