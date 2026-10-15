@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.0](https://github.com/somaz94/agentport/compare/v0.1.1...v0.2.0) (2026-10-15)
+
+### Features
+
+- add a marked note mapping Claude Code tool names to the target's ([e7e5b45](https://github.com/somaz94/agentport/commit/e7e5b45e8f6f5c7f0fa4eb399f0dfde4efff7c6f))
+- report CLAUDE.md sections changed since AGENTS.md was reviewed ([18c2f3e](https://github.com/somaz94/agentport/commit/18c2f3efc56e01c5949a8947c58b37b974b79885))
+
+### Chores
+
+- base create-pr.sh on origin/main ([434a50f](https://github.com/somaz94/agentport/commit/434a50f3286ca7bb9fc77c36e1afe43fd5e769c3))
+- classify scoped and breaking commits in create-pr.sh ([ec4721a](https://github.com/somaz94/agentport/commit/ec4721ade9303628e7f76773eda9059f913b88fd))
+- drop step-narration comments from create-pr.sh ([2aed855](https://github.com/somaz94/agentport/commit/2aed8556668e0242ad1caef9c479486d4768ed96))
+
+### Contributors
+
+- somaz
+
+<br/>
+
 ## [v0.1.1](https://github.com/somaz94/agentport/compare/v0.1.0...v0.1.1) (2026-10-06)
 
 ### Bug Fixes
