@@ -234,3 +234,53 @@ func TestStatusMixedUnitAndWarnings(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestSyncProjectScope(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	repo := t.TempDir()
+	writeFile(t, filepath.Join(repo, ".claude", "commands", "deploy.md"), "---\ndescription: Deploy\n---\nDeploy $ARGUMENTS.\n")
+	out, err := run(t, "sync", "--scope", "project", "--root", repo, "--to", "antigravity", "--apply")
+	if err != nil || !strings.Contains(out, "antigravity: 1 new") {
+		t.Fatalf("project apply = %q, %v", out, err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".agents", "skills", "deploy", "SKILL.md")); err != nil {
+		t.Fatal("the project sync did not write the skill")
+	}
+	if out, err := run(t, "status", "--scope", "project", "--root", repo, "--to", "antigravity"); err != nil || !strings.Contains(out, "1 unchanged") {
+		t.Errorf("project status = %q, %v", out, err)
+	}
+	t.Chdir(repo)
+	if out, err := run(t, "sync", "--scope", "project", "--to", "antigravity"); err != nil || !strings.Contains(out, "1 unchanged") {
+		t.Errorf("project sync from the repository = %q, %v", out, err)
+	}
+	if _, err := run(t, "sync", "--scope", "team", "--root", repo); err == nil || !strings.Contains(err.Error(), "--scope") {
+		t.Errorf("unknown scope: %v", err)
+	}
+}
+
+func TestSyncProjectScopeRefusals(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	repo := t.TempDir()
+	writeFile(t, filepath.Join(repo, ".claude", "commands", "deploy.md"), "---\ndescription: Deploy\n---\nDeploy.\n")
+	if out, err := run(t, "status", "--scope", "project", "--root", repo, "--to", "antigravity"); err != nil || !strings.Contains(out, "1 new") {
+		t.Fatalf("status in a bare repository = %q, %v", out, err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".agents")); !os.IsNotExist(err) {
+		t.Error("status created .agents")
+	}
+	for name, args := range map[string][]string{
+		"no target":   {"sync", "--scope", "project", "--root", repo},
+		"two targets": {"sync", "--scope", "project", "--root", repo, "--to", "antigravity,codex"},
+	} {
+		if _, err := run(t, args...); err == nil || !strings.Contains(err.Error(), "exactly one target") {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	t.Setenv("HOME", repo)
+	if _, err := run(t, "sync", "--scope", "project", "--root", repo, "--to", "antigravity"); err == nil || !strings.Contains(err.Error(), "home directory") {
+		t.Errorf("home as the repository: %v", err)
+	}
+	if !sameDir(filepath.Join(repo, "missing"), filepath.Join(repo, "missing", ".")) {
+		t.Error("sameDir: equal missing paths differ")
+	}
+}

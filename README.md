@@ -79,8 +79,8 @@ Every command takes `-o json`. Settings such as the target harnesses and transla
 
 ## What sync touches
 
-- Only the user scope is synced: `~/.claude`, the hub, into each target's user-level directories. A project's `.claude/` is not.
-- It writes skills and agents where each target loads them, and records every file it writes in `.agentport/manifest.json` inside that target's configuration directory; `agentport doctor` prints each manifest's path.
+- By default the user scope is synced: `~/.claude`, the hub, into each target's user-level directories. `--scope project` syncs a repository's `.claude/` (the one at `--root`, or the current directory) into that target's project directories, for exactly one target named with `--to` or in the settings file: Codex and Antigravity share a project's `.agents/skills`, so a second harness is refused there, in the same run or a later one. A project sync writes only inside the repository, refusing a target directory that a link aims elsewhere. `adopt` works at the user scope only.
+- It writes skills and agents where each target loads them, and records every file it writes in `.agentport/manifest.json` inside that target's configuration directory; `agentport doctor` prints each user-scope manifest's path, and a project's is in its harness directory (`.agents/.agentport/` for Antigravity).
 - A file it did not write is never changed or deleted, unless it already holds exactly what agentport would write: it is then recorded as agentport's. One that differs and sits where agentport would write is reported as `conflict`. Move or delete it, or leave the hub item out with `skip` (see [Configuration](docs/design.md#configuration)), then sync again.
 - A file edited in the target since agentport wrote it is reported as `drift` and left alone. `agentport adopt <path>` carries the edit back into the hub; `agentport sync --apply --force` overwrites it.
 - When a hub item is removed, its output is deleted on the next `--apply`, unless it was edited: it is then reported as `drift` until `adopt`, or `--force` stops tracking it and leaves it in place.

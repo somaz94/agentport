@@ -164,9 +164,9 @@ Antigravity reports none of these failures, so the writer checks all of them bef
 
 ## Sync
 
-`sync` converts every skill, command and agent in the hub into each target harness at the user scope. The project scope is not synced: Codex and Antigravity both read a project's `.agents/skills`, so their outputs would collide there.
+`sync` converts every skill, command and agent in the hub into each target harness, at the user scope by default. With `--scope project` the hub is a repository's `.claude/` and the target writes where it loads project files (Antigravity's `.agents/skills` and `.agents/agents`), keeping its manifest in its project directory (`.agents/.agentport/manifest.json` for Antigravity, `.codex/.agentport/manifest.json` for Codex). A project sync names exactly one target, and refuses it when another harness's project manifest already tracks a file in its directories: Codex and Antigravity both read a project's `.agents/skills`, and two manifests tracking one file would each report the other's output as drift. A repository has no harness directory until something is synced into it, so at the project scope the named target counts as set up and its directory is created on `--apply`. A repository is input agentport did not write, so every target directory must resolve inside it: a committed link aiming `.agents` at the home directory would otherwise let a sync, and the orphan deletions of a committed manifest, reach outside. Whether a repository commits its generated `.agents/` is its own choice; agentport treats a committed manifest like any other. `adopt` stays at the user scope: a file in the shared `.agents/skills` names no single target.
 
-- Dry run by default; `--apply` writes. Without `--to` or configured targets, every harness whose configuration directory (from the location table) exists is a target. A target named but not set up is refused rather than created; so is a target directory that is a link to nothing, or that resolves to the same place as a hub directory or another target's, through a link in either direction.
+- Dry run by default; `--apply` writes. Without `--to` or configured targets, every harness whose configuration directory (from the location table) exists is a target. At the user scope a target named but not set up is refused rather than created; so is a target directory that is a link to nothing, or that resolves to the same place as a hub directory or another target's, through a link in either direction.
 - Each target keeps `.agentport/manifest.json` in its configuration directory. For every file it tracks it records the hub item the file came from and fingerprints of both, the output's content and mode included (`manifest.Entry` in `internal/manifest`). Paths are relative to the home directory, because one harness can keep skills and agents in different trees.
 - Every target file is classified by comparing what the manifest recorded, what the hub converts to now, and what is on disk, content and mode together:
   - `new`, `update` (what the hub converts to changed, the file did not) and `unchanged`.
@@ -238,7 +238,7 @@ modelInvocableCommands: false    # let the model start converted commands, as Cl
 - `skip` patterns use Go's `path.Match` syntax, where `*` does not cross `/`; a pattern that matches a directory skips everything below it.
 - `modelInvocableCommands` is what `convert --model-invocable` sets for one conversion. `sync` takes no flag for it, so `adopt` converts with the setting `sync` used.
 
-Syncing the project scope will need repositories to exclude, path rewriting in bodies and a model map; none of them is a key yet.
+The project scope takes the same settings as the user scope. Path rewriting in bodies and a per-project model map are not keys yet: a body that names `.claude/agents/<name>.md` keeps naming it.
 
 <br/>
 

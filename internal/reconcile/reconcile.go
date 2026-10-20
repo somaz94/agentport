@@ -29,8 +29,11 @@ import (
 
 // Options say what to sync and how.
 type Options struct {
-	// Root is the scope's root, the home directory; Unit and File paths are relative to it.
+	// Root is the scope's root, the home directory or a repository; Unit and File paths are relative to it.
 	Root string
+	// Scope is the user scope (the default) or the project scope: a repository's .claude into each
+	// target's project directories.
+	Scope paths.Scope
 	// Config supplies the hub, translation pairs, skip patterns and conversion settings.
 	Config *config.Config
 	// Targets are the harnesses to sync; when empty, every one that is set up.
@@ -40,6 +43,14 @@ type Options struct {
 	// Force replaces target files edited by hand, and stops tracking edited files whose source is
 	// gone instead of reporting them on every run.
 	Force bool
+}
+
+// scope is the scope opts names, the user scope when it names none.
+func (opts Options) scope() paths.Scope {
+	if opts.Scope == "" {
+		return paths.ScopeUser
+	}
+	return opts.Scope
 }
 
 // Unit statuses that leave every file of the unit as it is.
@@ -193,7 +204,7 @@ func setUp(opts Options) []harness.ID {
 		if err != nil {
 			continue
 		}
-		if root, err := l.Root(paths.ScopeUser); err == nil {
+		if root, err := l.Root(opts.scope()); err == nil {
 			if info, err := os.Stat(filepath.Join(opts.Root, root)); err == nil && info.IsDir() {
 				out = append(out, h)
 			}
@@ -223,13 +234,22 @@ func planTarget(h *hub, to harness.ID, opts Options) *Target {
 		t.Err = err
 		return t
 	}
-	rootRel, err := l.Root(paths.ScopeUser)
+	rootRel, err := l.Root(opts.scope())
 	if err != nil {
 		t.Err = err
 		return t
 	}
 	root := filepath.Join(opts.Root, rootRel)
+	if opts.scope() == paths.ScopeProject {
+		if err := projectChecks(to, root, opts); err != nil {
+			t.Err = err
+			return t
+		}
+	}
 	switch info, err := os.Stat(root); {
+	// A repository has no harness directory until something is synced into it; naming the target
+	// is the setup, and apply creates the directory.
+	case errors.Is(err, fs.ErrNotExist) && opts.scope() == paths.ScopeProject:
 	case errors.Is(err, fs.ErrNotExist):
 		t.Err = fmt.Errorf("%s is not set up: %s does not exist", to.Title(), root)
 		return t
@@ -247,7 +267,7 @@ func planTarget(h *hub, to harness.ID, opts Options) *Target {
 	}
 	for _, suffix := range append([]string{""}, opts.Config.Pairs...) {
 		for _, kind := range []ir.Kind{ir.KindSkill, ir.KindAgent} {
-			d, err := l.Dir(paths.ScopeUser, kind)
+			d, err := l.Dir(opts.scope(), kind)
 			if err != nil {
 				t.Err = err
 				return t
@@ -268,11 +288,81 @@ func planTarget(h *hub, to harness.ID, opts Options) *Target {
 				t.Err = err
 				return t
 			}
+			if opts.scope() == paths.ScopeProject {
+				if err := insideRepository(kd.abs, opts.Root); err != nil {
+					t.Err = err
+					return t
+				}
+			}
 			t.dirs = append(t.dirs, kd)
 		}
 	}
 	(&planner{t: t, h: h, opts: opts, layout: l}).run()
 	return t
+}
+
+// projectChecks refuses a project target whose directory a cloned repository could aim elsewhere,
+// or whose shared directories another harness already syncs into.
+func projectChecks(to harness.ID, root string, opts Options) error {
+	if dangling(root) {
+		return fmt.Errorf("%s links to a missing directory; create it or remove the link", root)
+	}
+	if err := insideRepository(root, opts.Root); err != nil {
+		return err
+	}
+	return sharedWithAnother(to, opts)
+}
+
+// insideRepository refuses a directory that resolves outside the repository: a link committed to
+// it would otherwise let a project sync write, and delete through its manifest, anywhere.
+func insideRepository(dir, repo string) error {
+	if !within(resolveExisting(dir), resolveExisting(repo)) {
+		return fmt.Errorf("%s resolves outside the repository %s; a project sync writes only inside it", dir, repo)
+	}
+	return nil
+}
+
+// sharedWithAnother refuses to when another harness's project manifest already tracks a file in
+// one of its directories, as Codex and Antigravity do in a project's .agents/skills: two manifests
+// tracking one file would each report the other's output as drift.
+func sharedWithAnother(to harness.ID, opts Options) error {
+	l, err := paths.For(to)
+	if err != nil {
+		return err
+	}
+	var dirs []string
+	for _, suffix := range append([]string{""}, opts.Config.Pairs...) {
+		for _, kind := range []ir.Kind{ir.KindSkill, ir.KindAgent} {
+			if d, err := l.Dir(paths.ScopeProject, kind); err == nil {
+				dirs = append(dirs, filepath.ToSlash(d)+suffix+"/")
+			}
+		}
+	}
+	for _, other := range harness.All {
+		if other == to || other == opts.Config.Hub {
+			continue
+		}
+		ol, err := paths.For(other)
+		if err != nil {
+			continue
+		}
+		orel, err := ol.Root(paths.ScopeProject)
+		if err != nil {
+			continue
+		}
+		m, err := manifest.Load(filepath.Join(opts.Root, orel))
+		if err != nil {
+			return err
+		}
+		for p := range m.Entries {
+			for _, d := range dirs {
+				if strings.HasPrefix(p, d) {
+					return fmt.Errorf("%s already syncs into %s in this repository; sync only one of them here", other.Title(), strings.TrimSuffix(d, "/"))
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // outsideHub refuses a target directory that is, contains or sits in the hub or one of its

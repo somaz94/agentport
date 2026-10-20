@@ -83,7 +83,7 @@ func readHub(opts Options) (*hub, error) {
 	if err != nil {
 		return nil, err
 	}
-	rootRel, err := l.Root(paths.ScopeUser)
+	rootRel, err := l.Root(opts.scope())
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func readHub(opts Options) (*hub, error) {
 		return nil, fmt.Errorf("the %s hub %s is not a directory", opts.Config.Hub.Title(), h.dir)
 	}
 	dirOf := func(kind ir.Kind, suffix string) string {
-		d, err := l.Dir(paths.ScopeUser, kind)
+		d, err := l.Dir(opts.scope(), kind)
 		if err != nil {
 			return ""
 		}

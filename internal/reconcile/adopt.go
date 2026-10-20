@@ -61,6 +61,10 @@ type Change struct {
 // convert to what agentport recorded writing, or adopting would undo the hub's own changes since;
 // opts.Force adopts anyway unless the hub item now converts to another path.
 func Adopt(opts Options, target string) (*Adoption, error) {
+	// Codex and Antigravity share a project's .agents/skills, so a file there names no single target.
+	if opts.scope() != paths.ScopeUser {
+		return nil, fmt.Errorf("adopt works at the user scope only; carry a project edit into its .claude by hand")
+	}
 	if opts.Config == nil {
 		opts.Config = config.Default()
 	}

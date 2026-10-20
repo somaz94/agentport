@@ -13,6 +13,7 @@ import (
 	"github.com/somaz94/agentport/internal/config"
 	"github.com/somaz94/agentport/internal/harness"
 	"github.com/somaz94/agentport/internal/manifest"
+	"github.com/somaz94/agentport/internal/paths"
 )
 
 func must(t *testing.T, err error) {
@@ -729,5 +730,152 @@ func TestApplyNeverChangesTheHub(t *testing.T) {
 	}
 	if err := r.remove(base, &File{Path: ".claude/skills/alpha/SKILL.md"}, root); err == nil || !exists(root, ".claude/skills/alpha/SKILL.md") {
 		t.Error("a deletion in the hub was not refused")
+	}
+}
+
+// repoRoot builds a repository whose .claude holds a command, an agent and a Korean mirror, with
+// no harness directory yet.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	put(t, root, ".claude/commands/deploy.md", deployCmd, 0o644)
+	put(t, root, ".claude/agents/reviewer.md", reviewer, 0o644)
+	put(t, root, ".claude/agents-ko/reviewer.md", "---\nname: reviewer\ndescription: 코드 리뷰\ntools: Read\n---\n리뷰.\n", 0o644)
+	return root
+}
+
+func projectOptions(root string, targets ...harness.ID) Options {
+	opts := options(root, nil, targets...)
+	opts.Scope = paths.ScopeProject
+	return opts
+}
+
+func TestProjectScopeSyncsARepositoryIntoAgents(t *testing.T) {
+	root := repoRoot(t)
+	p := sync(t, projectOptions(root, harness.Antigravity))
+	for _, rel := range []string{".agents/skills/deploy/SKILL.md", ".agents/agents/reviewer.md", ".agents/agents-ko/reviewer.md"} {
+		if !exists(root, rel) {
+			t.Errorf("%s was not written", rel)
+		}
+	}
+	if want := filepath.Join(root, ".agents", manifest.Dir, manifest.File); p.Targets[0].Manifest != want || !exists(root, ".agents/"+manifest.Dir+"/"+manifest.File) {
+		t.Errorf("manifest = %s; want %s, written", p.Targets[0].Manifest, want)
+	}
+	if exists(root, ".gemini") {
+		t.Error("the project scope wrote into the user-scope directory")
+	}
+	if again := sync(t, projectOptions(root, harness.Antigravity)); again.Changes() {
+		t.Errorf("second project sync has changes: %v", states(again))
+	}
+
+	must(t, os.Remove(filepath.Join(root, ".claude/agents/reviewer.md")))
+	sync(t, projectOptions(root, harness.Antigravity))
+	if exists(root, ".agents/agents/reviewer.md") || !exists(root, ".agents/agents-ko/reviewer.md") {
+		t.Error("a removed agent's output was not deleted, or its mirror went with it")
+	}
+}
+
+func TestProjectScopeRefusesTwoTargetsSharingAgents(t *testing.T) {
+	p, err := New(projectOptions(repoRoot(t), harness.Antigravity, harness.Codex))
+	must(t, err)
+	if p.Targets[0].Err != nil || p.Targets[1].Err == nil || !strings.Contains(p.Targets[1].Err.Error(), "Antigravity") {
+		t.Errorf("errors = %v, %v; want Codex refused for sharing .agents/skills", p.Targets[0].Err, p.Targets[1].Err)
+	}
+}
+
+func TestProjectScopeWithoutNamedTargets(t *testing.T) {
+	if p, err := New(projectOptions(repoRoot(t), harness.Antigravity)); err != nil || p.Targets[0].Err != nil {
+		t.Errorf("a named target in a bare repository: %v, %v", err, p.Targets[0].Err)
+	}
+	opts := projectOptions(repoRoot(t))
+	opts.Targets = nil
+	if _, err := New(opts); err == nil || !strings.Contains(err.Error(), "no target harness is set up") {
+		t.Errorf("unnamed targets in a bare repository: %v", err)
+	}
+}
+
+func TestAdoptRefusesTheProjectScope(t *testing.T) {
+	root := repoRoot(t)
+	if _, err := Adopt(projectOptions(root, harness.Antigravity), filepath.Join(root, ".agents/agents/reviewer.md")); err == nil ||
+		!strings.Contains(err.Error(), "user scope only") {
+		t.Errorf("adopt at the project scope: %v", err)
+	}
+}
+
+func TestProjectScopeSecondSyncRewritesNothing(t *testing.T) {
+	root := repoRoot(t)
+	sync(t, projectOptions(root, harness.Antigravity))
+	man := filepath.Join(root, ".agents", manifest.Dir, manifest.File)
+	skill := filepath.Join(root, ".agents/skills/deploy/SKILL.md")
+	before, _ := os.ReadFile(man)
+	info, err := os.Stat(skill)
+	must(t, err)
+	time.Sleep(10 * time.Millisecond)
+	sync(t, projectOptions(root, harness.Antigravity))
+	after, _ := os.ReadFile(man)
+	again, err := os.Stat(skill)
+	must(t, err)
+	if !bytes.Equal(before, after) || !again.ModTime().Equal(info.ModTime()) {
+		t.Error("a second project sync rewrote the manifest or an unchanged file")
+	}
+}
+
+func TestProjectScopeLeavesAHandWrittenFile(t *testing.T) {
+	root := repoRoot(t)
+	put(t, root, ".agents/skills/deploy/SKILL.md", "mine\n", 0o644)
+	p := sync(t, projectOptions(root, harness.Antigravity))
+	if got := read(t, root, ".agents/skills/deploy/SKILL.md"); got != "mine\n" {
+		t.Errorf("a file agentport did not write was changed: %q", got)
+	}
+	if st := states(p)[".agents/skills/deploy"]; st != Conflict {
+		t.Errorf("unit state = %q; want %s (states %v)", st, Conflict, states(p))
+	}
+}
+
+func TestProjectScopeStaysInsideTheRepository(t *testing.T) {
+	root, outside := repoRoot(t), t.TempDir()
+	must(t, os.Symlink(outside, filepath.Join(root, ".agents")))
+	p, err := New(projectOptions(root, harness.Antigravity))
+	must(t, err)
+	if p.Targets[0].Err == nil || !strings.Contains(p.Targets[0].Err.Error(), "outside the repository") {
+		t.Fatalf("error = %v; want the repository refusal", p.Targets[0].Err)
+	}
+	must(t, p.Apply())
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Error("a project sync wrote outside the repository")
+	}
+
+	root = repoRoot(t)
+	must(t, os.MkdirAll(filepath.Join(root, ".agents"), 0o755))
+	must(t, os.Symlink(outside, filepath.Join(root, ".agents/agents")))
+	if p := plan(t, projectOptions(root, harness.Codex)); len(p.Targets) != 1 {
+		t.Fatal("Codex, which keeps no agents in .agents, should plan")
+	}
+	p, err = New(projectOptions(root, harness.Antigravity))
+	must(t, err)
+	if p.Targets[0].Err == nil || !strings.Contains(p.Targets[0].Err.Error(), "outside the repository") {
+		t.Errorf("linked agents directory: %v; want the repository refusal", p.Targets[0].Err)
+	}
+
+	root = repoRoot(t)
+	must(t, os.Symlink(filepath.Join(root, "gone"), filepath.Join(root, ".agents")))
+	p, err = New(projectOptions(root, harness.Antigravity))
+	must(t, err)
+	if p.Targets[0].Err == nil || !strings.Contains(p.Targets[0].Err.Error(), "missing directory") {
+		t.Errorf("dangling .agents: %v; want the missing-directory refusal", p.Targets[0].Err)
+	}
+}
+
+func TestProjectScopeRefusesASecondHarnessAcrossRuns(t *testing.T) {
+	root := repoRoot(t)
+	sync(t, projectOptions(root, harness.Antigravity))
+	p, err := New(projectOptions(root, harness.Codex))
+	must(t, err)
+	if p.Targets[0].Err == nil || !strings.Contains(p.Targets[0].Err.Error(), "Antigravity already syncs into .agents/skills") {
+		t.Errorf("Codex after Antigravity: %v", p.Targets[0].Err)
+	}
+	put(t, root, ".agents/.agentport/manifest.json", "{", 0o644)
+	if p, err := New(projectOptions(root, harness.Codex)); err != nil || p.Targets[0].Err == nil {
+		t.Errorf("a broken manifest of the other harness was not reported: %v, %v", err, p.Targets[0].Err)
 	}
 }

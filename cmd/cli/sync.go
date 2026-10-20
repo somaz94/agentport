@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
@@ -27,6 +29,7 @@ type hubOptions struct {
 	to     []string
 	root   string
 	config string
+	scope  string
 }
 
 // register adds --root and --config, and --to when the command picks its targets.
@@ -37,6 +40,14 @@ func (h *hubOptions) register(cmd *cobra.Command, withTargets bool) {
 	}
 	f.StringVar(&h.root, "root", "", "home directory holding the hub and the targets (default: yours)")
 	f.StringVar(&h.config, "config", "", "settings file (default: $XDG_CONFIG_HOME/agentport/config.yaml)")
+}
+
+// registerScope adds --scope, for the commands that can work on a repository's .claude.
+func (h *hubOptions) registerScope(cmd *cobra.Command) {
+	f := cmd.Flags()
+	f.StringVar(&h.scope, "scope", string(paths.ScopeUser),
+		"user (~/.claude into each target's user directories) or project (a repository's .claude into its own harness directories, for one target)")
+	f.Lookup("root").Usage = "the home directory holding the hub and the targets, or the repository at --scope project (default: yours, or the current directory)"
 }
 
 // targetNames are the harnesses --to accepts: every one but the hub.
@@ -56,7 +67,13 @@ func (h *hubOptions) resolve() (reconcile.Options, error) {
 	if err != nil {
 		return reconcile.Options{}, err
 	}
-	root, err := scopeRoot(paths.ScopeUser, h.root)
+	scope := paths.ScopeUser
+	if h.scope != "" {
+		if scope, err = paths.ParseScope(h.scope); err != nil {
+			return reconcile.Options{}, fmt.Errorf("--scope: %w", err)
+		}
+	}
+	root, err := scopeRoot(scope, h.root)
 	if err != nil {
 		return reconcile.Options{}, err
 	}
@@ -66,7 +83,34 @@ func (h *hubOptions) resolve() (reconcile.Options, error) {
 			return reconcile.Options{}, fmt.Errorf("--to: %w", err)
 		}
 	}
-	return reconcile.Options{Root: root, Config: cfg, Targets: targets, Generator: "agentport " + Version}, nil
+	if scope == paths.ScopeProject {
+		if err := projectRoot(root, targets); err != nil {
+			return reconcile.Options{}, err
+		}
+	}
+	return reconcile.Options{Root: root, Scope: scope, Config: cfg, Targets: targets, Generator: "agentport " + Version}, nil
+}
+
+// projectRoot refuses a project sync that names other than one target, since Codex and Antigravity
+// share a project's .agents/skills, or whose repository is the home directory, where the project
+// layout would land on the user scope's directories.
+func projectRoot(root string, targets []harness.ID) error {
+	if len(targets) != 1 {
+		return errors.New("--scope project: name exactly one target with --to or in the settings file")
+	}
+	if home, err := os.UserHomeDir(); err == nil && sameDir(root, home) {
+		return errors.New("--scope project: the repository is your home directory; use the user scope")
+	}
+	return nil
+}
+
+func sameDir(a, b string) bool {
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+	if errA != nil || errB != nil {
+		return filepath.Clean(a) == filepath.Clean(b)
+	}
+	return ra == rb
 }
 
 type syncOptions struct {
@@ -90,6 +134,7 @@ func newSyncCmd(opts *options) *cobra.Command {
 		},
 	}
 	s.register(cmd, true)
+	s.registerScope(cmd)
 	f := cmd.Flags()
 	f.BoolVar(&s.apply, "apply", false, "write the changes")
 	f.BoolVar(&s.check, "check", false, fmt.Sprintf("write nothing; exit %d when a target is out of sync", exitOutOfSync))
@@ -163,6 +208,7 @@ func newStatusCmd(opts *options) *cobra.Command {
 		},
 	}
 	h.register(cmd, true)
+	h.registerScope(cmd)
 	return cmd
 }
 
