@@ -55,6 +55,17 @@ Point `--root` at a scratch home whose `.claude` links to your real one, and cre
 
 <br/>
 
+## Demo
+
+The GIF in the README runs the real `agentport` inside the recording container, on the synthetic skill in `examples/demo/release-notes/` copied into a throwaway home. The report it shows is the format most likely to change while the project is in early development; when it does, regenerate it from the repo root:
+
+```bash
+GOOS=linux go build -o bin/linux/agentport ./cmd/agentport
+docker run --rm -v "$PWD:/vhs" ghcr.io/charmbracelet/vhs examples/demo/demo.tape
+```
+
+<br/>
+
 ## Workflow
 
 ```bash

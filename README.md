@@ -4,6 +4,8 @@
 
 Keep your Claude Code skills, slash commands and subagents as the source of truth, and get working copies in **Codex** and **Antigravity** — translated, not copied.
 
+![agentport converts a Claude Code skill for Codex and reports, field by field, what it mapped, dropped, transformed or approximated](examples/demo/demo.gif)
+
 > Early development. The design is in [docs/design.md](docs/design.md); the verified format of each harness is in [docs/spec/](docs/spec/).
 
 <br/>
